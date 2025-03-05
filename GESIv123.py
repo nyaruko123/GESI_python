@@ -132,8 +132,9 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
 
     # Sound sampling rate conversion & normalization
     if GCparam['fs'] != GESIparam['fs']:
-        SndTest = resample(SndTest, GCparam['fs'], GESIparam['fs'])
-        SndRef = resample(SndRef, GCparam['fs'], GESIparam['fs'])
+        SndTest = resample_signal(SndTest, GESIparam['fs'], GCparam['fs'])
+        SndRef = resample_signal(SndRef, GESIparam['fs'], GCparam['fs'])
+
 
     # Calibrate input level of SndRef
     SndRef, MdsAmpdB = Eqlz2MeddisHCLevel(SndRef, [], GESIparam['DigitalRms1SPLdB'])
