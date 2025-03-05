@@ -143,7 +143,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
 
 
     # Calibrate input level of SndRef
-    SndRef, MdsAmpdB = Eqlz2MeddisHCLevel(SndRef, [], GESIparam['DigitalRms1SPLdB'])
+    SndRef, MdsAmpdB = Eqlz2MeddisHCLevel(SndRef, None, GESIparam['DigitalRms1SPLdB'])
     SndTest *= 10**(MdsAmpdB[1] / 20)
 
     # Analysis by dynamic compressive gammachirp filterbank
