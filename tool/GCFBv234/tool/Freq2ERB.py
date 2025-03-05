@@ -15,6 +15,9 @@ def Freq2ERB(cf):
     if cf is None:
         raise ValueError("Center frequency (cf) must be provided.")
 
+    # 🚀 **确保 cf 是 numpy 数组**
+    cf = np.asarray(cf, dtype=np.float64)
+
     ERBrate = 21.4 * np.log10(4.37 * cf / 1000 + 1)
     ERBwidth = 24.7 * (4.37 * cf / 1000 + 1)
 
@@ -26,5 +29,6 @@ def Freq2ERB(cf):
         print(f"         {cfmin}(Hz) <= Fc <= {cfmax}(Hz).")
 
     return ERBrate, ERBwidth
+
 
 
