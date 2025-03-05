@@ -26,6 +26,7 @@ def FilterModFB(Env, ParamMFB):
     MFcoefIIR = ParamMFB['MFcoefIIR']
 
     LenFc = len(ParamMFB['fc'])
+    Env = np.atleast_2d(Env)
     NumEnv, LenEnv = Env.shape
     if NumEnv > 1:
         raise ValueError('Env should be a monoaural row vector.')  # 检查输入格式
