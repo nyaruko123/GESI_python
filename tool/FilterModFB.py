@@ -3,10 +3,8 @@ from scipy.signal import butter, freqz, lfilter
 
 def FilterModFB(Env, ParamMFB):
     # 通过调制滤波器组进行滤波
-    global MFcoefIIR  # 使用全局变量存储滤波器系数
-
     # 默认中心频率
-    ParamMFB['fc_default'] = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+    ParamMFB.setdefault('fc_default', [1, 2, 4, 8, 16, 32, 64, 128, 256, 512])
 
     if Env is None:
         # 如果没有输入，返回默认设置
@@ -21,8 +19,11 @@ def FilterModFB(Env, ParamMFB):
     if 'SwPlot' not in ParamMFB:
         ParamMFB['SwPlot'] = 0  # 默认不绘图
 
-    if 'a' not in MFcoefIIR:
-        MFcoefIIR = MkCoefModFilter(ParamMFB)  # 生成调制滤波器系数
+    # **使用 ParamMFB 作为存储滤波器系数的地方**
+    if 'MFcoefIIR' not in ParamMFB:
+        ParamMFB['MFcoefIIR'] = MkCoefModFilter(ParamMFB)  # 生成调制滤波器系数
+
+    MFcoefIIR = ParamMFB['MFcoefIIR']
 
     LenFc = len(ParamMFB['fc'])
     NumEnv, LenEnv = Env.shape
@@ -32,8 +33,6 @@ def FilterModFB(Env, ParamMFB):
     OutMFB = np.zeros((LenFc, LenEnv))
     for nfc in range(LenFc):
         OutMFB[nfc, :] = lfilter(MFcoefIIR['b'][nfc, :], MFcoefIIR['a'][nfc, :], Env)
-
-    ParamMFB['MFcoefIIR'] = MFcoefIIR  # 更新参数
 
     return OutMFB, ParamMFB  # 返回输出和参数
 
