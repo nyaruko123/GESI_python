@@ -6,7 +6,7 @@ from scipy.io import loadmat, savemat,wavfile
 from tool.TimeAlignXcorr import TimeAlignXcorr
 from tool.GCFBv234.tool.TaperWindow import TaperWindow
 from tool.FilterModFB import FilterModFB
-from tool.GCFBv234 import GCFBv234
+from tool.GCFBv234.GCFBv234 import GCFBv234
 from tool.F0limit2SSIweight import F0limit2SSIweight
 from tool.Metric2Pcorrect_Sigmoid import Metric2Pcorrect_Sigmoid
 from tool.GCFBv234.tool.Eqlz2MeddisHCLevel import Eqlz2MeddisHCLevel
