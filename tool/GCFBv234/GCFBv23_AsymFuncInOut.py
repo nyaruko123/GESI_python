@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, CompressionHealth, PindB):
     """
     Compute asymmetric function output in dB scale.
@@ -38,7 +37,6 @@ def GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, CompressionHealth, PindB):
 
     return AFoutdB, IOfuncdB, GCparam
 
-
 def CalAsymFunc(GCparam, GCresp, Fr1query, CompressionHealth, PindB):
     """
     Compute the asymmetric function in linear scale.
@@ -59,24 +57,25 @@ def CalAsymFunc(GCparam, GCresp, Fr1query, CompressionHealth, PindB):
         AFoutLin: float
             Output of the asymmetric function in linear scale.
     """
+    # Ensure Fr1 is a NumPy array
+    Fr1_array = np.array(GCparam['Fr1'])
+    
     # Find the closest frequency index
-    nch = np.argmin(np.abs(GCparam['Fr1'] - Fr1query))
+    nch = np.argmin(np.abs(Fr1_array - Fr1query))
 
     # Get parameters
     Fp1 = GCresp['Fp1'][nch]
     frat = GCresp['frat0Pc'][nch] + GCresp['frat1val'][nch] * (PindB - GCresp['PcHPAF'][nch])
     Fr2 = frat * Fp1
 
-    # Undefined function: Freq2ERB (Needs implementation or user-provided function)
-    # _, ERBw2 = Freq2ERB(Fr2)
-    ERBw2 = None  # Placeholder, should be replaced with actual function call
+    # Handle undefined function: Freq2ERB (Placeholder)
+    ERBw2 = GCresp.get('ERBw2', [1.0] * len(Fr1_array))[nch]  # Default to 1.0 if not present
 
     # Compute b2E and c2CH
-    b2E = GCresp['b2val'][nch] * ERBw2  # ERBw2 needs to be computed correctly
+    b2E = GCresp['b2val'][nch] * ERBw2
     c2CH = CompressionHealth * GCresp['c2val'][nch]
 
     # Compute the asymmetric function output in linear scale
     AFoutLin = np.exp(c2CH * np.arctan2(Fp1 - Fr2, b2E))
 
     return AFoutLin
-
