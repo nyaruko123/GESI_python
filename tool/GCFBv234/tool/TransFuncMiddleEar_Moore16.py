@@ -1,11 +1,4 @@
-"""
-Function [FreqTbl, FrspdBTbl] = TransFuncMiddleEar_Moore16(FreqList)
-    INPUT:
-        FreqList: List of frequencies
-    OUTPUT:
-        FreqTbl: Frequency table
-        FrspdBTbl: Corresponding dB values
-"""
+import numpy as np
 
 def TransFuncMiddleEar_Moore16(FreqList=None):
     table = [
@@ -26,6 +19,9 @@ def TransFuncMiddleEar_Moore16(FreqList=None):
         FrspdBTbl = [pair[1] for pair in table]
         return FreqTbl, FrspdBTbl
 
+    #  **确保 FreqList 是列表**
+    FreqList = np.atleast_1d(FreqList)  # **转换为 1D 数组，防止整数输入**
+    
     FreqTbl = []
     FrspdBTbl = []
     for freq in FreqList:
