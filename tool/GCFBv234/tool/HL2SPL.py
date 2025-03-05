@@ -1,17 +1,14 @@
-"""
-Function [SPLdB] = HL2SPL(freq, HLdB)
-    INPUT:
-        freq: Frequency
-        HLdB: Hearing Level in dB
-    OUTPUT:
-        SPLdB: Sound Pressure Level in dB
-"""
 import numpy as np
 from .SPLatHL0dB_Table import SPLatHL0dB_Table
+
 def HL2SPL(freq, HLdB):
     Table1 = SPLatHL0dB_Table()  # Retrieve the table data
     FreqRef = Table1['freq']
     SPLdBatHL0dB = Table1['SPLatHL0dB']
+
+    # **确保 freq 和 HLdB 是 numpy 数组**
+    freq = np.atleast_1d(freq)  # 如果 freq 是整数，转换成数组
+    HLdB = np.atleast_1d(HLdB)  # 同理转换 HLdB
 
     if len(freq) != len(HLdB):
         raise ValueError('Length of freq & HLdB should be the same.')
@@ -25,5 +22,3 @@ def HL2SPL(freq, HLdB):
         SPLdB.append(HLdB[nf] + SPLdBatHL0dB[nfreq[0]])
 
     return SPLdB
-
-
