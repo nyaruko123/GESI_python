@@ -15,6 +15,12 @@ from tool.world_0_2_4_matlab import Harvest
 
 
 
+def resample_signal(signal, old_fs, new_fs):
+    """ 计算目标采样点数并进行重采样 """
+    num_samples = int(round(len(signal) * float(new_fs) / old_fs))  # 计算目标点数
+    return resample(signal, num_samples)  # 进行重采样
+
+
 
 def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     # Directory of this program
