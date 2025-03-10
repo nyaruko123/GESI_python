@@ -3,14 +3,22 @@ from scipy.signal import butter, freqz, lfilter
 
 def FilterModFB(Env, ParamMFB):
     # 通过调制滤波器组进行滤波
+
+    # 如果没有参数，返回默认 ParamMFB
+    if Env is None and ParamMFB is None:
+        ParamMFB = {"fs": 16000, "fc": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512], "SwPlot": 0}
+        return None, ParamMFB
+   
+    # if Env is None:
+    #     # 如果没有输入，返回默认设置
+    #     OutMFB = []
+    #     ParamMFB['fc'] = ParamMFB['fc_default']
+    #     return OutMFB, ParamMFB
+   
     # 默认中心频率
     ParamMFB.setdefault('fc_default', [1, 2, 4, 8, 16, 32, 64, 128, 256, 512])
 
-    if Env is None:
-        # 如果没有输入，返回默认设置
-        OutMFB = []
-        ParamMFB['fc'] = ParamMFB['fc_default']
-        return OutMFB, ParamMFB
+    
 
     if 'fs' not in ParamMFB:
         raise ValueError('Specify ParamMFB.fs')  # 检查采样频率
