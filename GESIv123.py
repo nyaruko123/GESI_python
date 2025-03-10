@@ -120,11 +120,12 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         GESIparam['Sim'] = {'PowerRatio': 0.6}
         print('GESIparam.Sim.PowerRatio is set to 0.6 (default) -- OK? Return to continue > ')
         input()
-    #sui bian ding de 
-    Env = np.copy(SndRef)
-    ParamMFB = {'fs':GESIparam['fs']}
-
-    _, MFBparam = FilterModFB(Env, ParamMFB)
+    # #sui bian ding de 
+    # Env = np.copy(SndRef)
+    # ParamMFB = {'fs':GESIparam['fs']}
+   
+    # _, MFBparam = FilterModFB(Env, ParamMFB) 
+    _, MFBparam = FilterModFB(None, None)
     if 'weightMFB' not in GESIparam['Sim']:
         LenMFB = len(MFBparam['fc'])
         GESIparam['Sim']['weightMFB'] = np.ones(LenMFB)
