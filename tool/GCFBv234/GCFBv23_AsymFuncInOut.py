@@ -62,6 +62,12 @@ def CalAsymFunc(GCparam, GCresp, Fr1query, CompressionHealth, PindB):
     
     # Find the closest frequency index
     nch = np.argmin(np.abs(Fr1_array - Fr1query))
+    
+    # Ensure nch is within the valid index range
+    if not GCresp.get('Fp1') or len(GCresp['Fp1']) == 0:
+        raise ValueError("GCresp['Fp1'] is empty. Check if GCFBv23_SetParam initialized it correctly.")
+    
+    nch = min(max(nch, 0), len(GCresp['Fp1']) - 1)
 
     # Get parameters
     Fp1 = GCresp['Fp1'][nch]
