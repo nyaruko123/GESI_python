@@ -14,7 +14,13 @@ def rceps(signal):
 def MkFilterField2Cochlea(StrCrct, fs, SwFwdBwd=1, SwPlot=0):
     global Param_Keep, fs_Keep, FIRCoefFwd_Keep, FIRCoefBwd_Keep
     global TypeField2EarDrum_Keep, TypeMidEar2Cochlea_Keep
-
+    #初始化
+    TypeField2EarDrum_Keep = None
+    TypeMidEar2Cochlea_Keep = None
+    fs_Keep = None
+    FIRCoefFwd_Keep = []
+    FIRCoefBwd_Keep = []
+    
     # Initial setup
     if fs > 48000:
         print(f'MkFilterField2Cochlea: Sampling rate of {fs} (Hz) (> 48000 (Hz)) is not recommended.')
