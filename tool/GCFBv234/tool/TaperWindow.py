@@ -44,6 +44,6 @@ def TaperWindow(LenWin, TypeTaper, LenTaper=None, RangeSigma=3, SwPlot=0):
         plt.title(f'TypeTaper = {TypeTaper}')
         plt.show()
 
-    return TaperWin, TypeTaper
+    return np.array(TaperWin), TypeTaper  # 确保 Win 是 numpy array
 
 
