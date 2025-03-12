@@ -117,8 +117,11 @@ def MkFilterField2Cochlea(StrCrct, fs, SwFwdBwd=1, SwPlot=0):
         
         FIRCoef = remez(NCoef, bands, desired, weight=weights[:len(desired)], fs=fs)
 
-    Win = TaperWindow(len(FIRCoef), 'han', LenCoef / 10)
-    FIRCoef = Win * FIRCoef
+    #Win = TaperWindow(len(FIRCoef), 'han', LenCoef / 10)
+    #FIRCoef = Win * FIRCoef
+    
+    Win, _ = TaperWindow(len(FIRCoef), 'han', int(LenCoef / 10))  # 确保正确解包
+    FIRCoef = Win * FIRCoef  # 逐元素相乘
 
     _, x_mp = rceps(FIRCoef)
     FIRCoef = x_mp[:len(x_mp) // 2]
