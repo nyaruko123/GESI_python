@@ -127,7 +127,8 @@ def GCFBv23_SetParam(GCparam):
     # 安全计算ERBw2
     with np.errstate(invalid='ignore', divide='ignore'):
         Fr1_safe = Fr1.astype(np.float64)
-        GCresp['ERBw2'] = 24.7 * (4.37 * (Fr1_safe/1000.0) + 1.0)
+        #GCresp['ERBw2'] = 24.7 * (4.37 * (Fr1_safe/1000.0) + 1.0)
+        GCresp['ERBw2'] = np.tile(24.7 * (4.37 * (Fr1_safe / 1000.0) + 1.0), (2, 1)) #确保 ERBw2的维度和 Fp1 兼容。Fp1 是 (2,100)，ERBw2 变(2,100) 
         GCresp['ERBw2'] = np.nan_to_num(GCresp['ERBw2'], nan=24.7)
 
     # ========== 后续参数生成 ==========
@@ -160,8 +161,8 @@ def GCFBv23_SetParam(GCparam):
     LvldB = GCparam.get('LeveldBscGCFB', 50)  # 默认 50 dB
     fratVal = GCresp['frat0Pc'] + GCresp['frat1val'] * (LvldB - GCresp['PcHPAF'])
     
-    #GCresp['Fr2'] = fratVal * GCresp['Fp1']  # 关键：计算 Fr2，避免 KeyError
-    GCresp['Fr2'] = fratVal[:, np.newaxis] * GCresp['Fp1'] # # 修正：保证 `fratVal` 的 shape 兼容 `Fp1`
+    GCresp['Fr2'] = fratVal * GCresp['Fp1']  # 关键：计算 Fr2，避免 KeyError
+    #GCresp['Fr2'] = fratVal[:, np.newaxis] * GCresp['Fp1'] # # 修正：保证 `fratVal` 的 shape 兼容 `Fp1`
     # ========== 计算听力损失 ==========
     GCparam = GCFBv23_HearingLoss(GCparam, GCresp)
 
