@@ -4,9 +4,12 @@ import matplotlib.pyplot as plt
 from scipy.signal.windows import hamming, hann, blackman
 
 def TaperWindow(LenWin, TypeTaper, LenTaper=None, RangeSigma=3, SwPlot=0):
+
     if LenTaper is None:
         LenTaper = LenWin // 2
-
+    else:
+        LenTaper = int(LenTaper)  # 确保 LenTaper 是整数
+    
     if (LenTaper * 2 + 1) >= LenWin:
         print('Caution (TaperWindow): No flat part.')
         if LenTaper != LenWin // 2:
@@ -19,7 +22,7 @@ def TaperWindow(LenWin, TypeTaper, LenTaper=None, RangeSigma=3, SwPlot=0):
         Taper = hamming(LenTaper * 2 + 1)
         TypeTaper = 'Hamming'
     elif TypeTaper == 'HAN' or TypeTaper == 'COS':
-        Taper = hann(LenTaper * 2 + 1)
+        Taper = hann(int(LenTaper * 2 + 1))
         TypeTaper = 'Hanning/Cosine'
     elif TypeTaper == 'BLA':
         Taper = blackman(LenTaper * 2 + 1)
