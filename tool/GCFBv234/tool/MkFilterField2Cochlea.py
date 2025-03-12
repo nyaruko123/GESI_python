@@ -86,7 +86,7 @@ def MkFilterField2Cochlea(StrCrct, fs, SwFwdBwd=1, SwPlot=0):
 
     if SwType <= 4:
         Param['TypeMidEar2Cochlea'] = 'MiddleEar'
-        TransFunc = TransFuncField2Cochlea(Param)  # Undefined function
+        TransFunc,ParamOut  = TransFuncField2Cochlea(Param)  # Undefined function
         FrspCrct = 10 ** (TransFunc['Field2CochleadB'] / 20)
         freq = TransFunc['freq']
         Param['TypeField2CochleadB'] = TransFunc['TypeField2CochleadB']
