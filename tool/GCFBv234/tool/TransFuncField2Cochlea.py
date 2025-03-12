@@ -23,8 +23,6 @@ from .TransFuncField2EarDrum_Set import TransFuncField2EarDrum_Set
 from scipy.signal import freqz
 import librosa
 
-
-
 def TransFuncField2Cochlea(ParamIn):
     if not ParamIn:
         print("Set Parameter to default value")
@@ -78,11 +76,16 @@ def TransFuncField2Cochlea(ParamIn):
     StrInterp1 = 'linear'
 
     if SwCrct <= 2:
-        FreqTbl, FrspdBTbl = TransFuncField2EarDrum_Set(TransFunc['TypeField2EarDrum'])
+        FreqTbl, FrspdBTbl, _ = TransFuncField2EarDrum_Set(TransFunc['TypeField2EarDrum'])
         if ParamIn['fs'] / 2 > max(FreqTbl):
             FreqTbl = np.append(FreqTbl, ParamIn['fs'] / 2)
             FrspdBTbl = np.append(FrspdBTbl, FrspdBTbl[-1])
-        Field2EarDrumdB = np.interp(Freq2ERB(freq), Freq2ERB(FreqTbl), FrspdBTbl, left=None, right=None)
+        # 修改点1：提取Freq2ERB的第一个返回值（假设是ERB数组）
+        erb_values = Freq2ERB(freq)[0]  # 假设返回元组的第一个元素是ERB数组
+        x_points = erb_values.flatten()
+        xp = Freq2ERB(FreqTbl)[0].flatten()
+        fp = FrspdBTbl.flatten()
+        Field2EarDrumdB = np.interp(x_points, xp, fp, left=None, right=None)
     elif SwCrct == 3:
         Field2EarDrumdB = np.zeros_like(freq)
     else:
@@ -90,7 +93,12 @@ def TransFuncField2Cochlea(ParamIn):
         print(f"Read Impulse response: {NameImpRsp}")
         SndImpRsp, fsIR = librosa.load(f"{DirData}{NameImpRsp}", sr=None)
         frspIR, freqIR = freqz(SndImpRsp, 1, len(SndImpRsp), fsIR)
-        Field2EarDrumdB = np.interp(Freq2ERB(freq), Freq2ERB(freqIR), 20 * np.log10(np.abs(frspIR)), left=None, right=None)
+        # 修改点2：耳机部分同样处理ERB返回值
+        erb_values = Freq2ERB(freq)[0]
+        x_points = erb_values.flatten()
+        xp = Freq2ERB(freqIR)[0].flatten()
+        fp = 20 * np.log10(np.abs(frspIR)).flatten()
+        Field2EarDrumdB = np.interp(x_points, xp, fp, left=None, right=None)
 
     # Compensate to 0dB at ParamIn.FreqCalib
     NumFreqCalib = np.argmin(np.abs(freq - ParamIn['FreqCalib']))
@@ -107,7 +115,12 @@ def TransFuncField2Cochlea(ParamIn):
         if ParamIn['fs'] / 2 > max(FreqTbl2):
             FreqTbl2 = np.append(FreqTbl2, ParamIn['fs'] / 2)
             FrspdBTbl2 = np.append(FrspdBTbl2, FrspdBTbl2[-1])
-        MidEar2CochleadB = np.interp(Freq2ERB(freq), Freq2ERB(FreqTbl2), FrspdBTbl2, left=None, right=None)
+        # 修改点3：中耳部分同样处理ERB返回值
+        erb_values = Freq2ERB(freq)[0]
+        x_points = erb_values.flatten()
+        xp = Freq2ERB(FreqTbl2)[0].flatten()
+        fp = FrspdBTbl2.flatten()
+        MidEar2CochleadB = np.interp(x_points, xp, fp, left=None, right=None)
 
         TransFunc['MidEar2CochleadB'] = MidEar2CochleadB
         TransFunc['MidEar2CochleadB_AtFreqCalib'] = MidEar2CochleadB[NumFreqCalib]
@@ -156,5 +169,3 @@ def TransFuncField2Cochlea(ParamIn):
         plt.show()
 
     return TransFunc, ParamOut
-
-
