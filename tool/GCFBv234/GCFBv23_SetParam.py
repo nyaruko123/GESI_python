@@ -27,6 +27,7 @@ def GCFBv23_SetParam(GCparam):
     GCparam.setdefault('n', 4)
     GCparam.setdefault('b1', [1.81, 0])
     GCparam.setdefault('c1', [-2.96, 0])
+    GCparam.setdefault('frat', [[0.466, 0], [0.0109, 0]])  # === 修改点 ===
     GCparam.setdefault('frat', [[0.466, 0], [0.0109, 0]])
     GCparam.setdefault('b2', [[2.17, 0], [0, 0]])
     GCparam.setdefault('c2', [[2.20, 0], [0, 0]])
@@ -134,6 +135,12 @@ def GCFBv23_SetParam(GCparam):
     GCresp['b1val'] = GCparam['b1'][0] * OneVec + GCparam['b1'][1] * GCresp['Ef']
     GCresp['c1val'] = GCparam['c1'][0] * OneVec + GCparam['c1'][1] * GCresp['Ef']
     
+    #GCresp['Fp1'] = Fr2Fpeak(GCparam['n'], GCresp['b1val'], GCresp['c1val'], Fr1) # Fp1 计算了两次 故删除此次
+
+    GCresp['b2val'] = GCparam['b2'][0][0] * OneVec + GCparam['b2'][0][1] * GCresp['Ef']
+    GCresp['c2val'] = GCparam['c2'][0][0] * OneVec + GCparam['c2'][0][1] * GCresp['Ef']
+
+
     # Fr2Fpeak维度保护
     try:
         fp1_low, fp1_high = Fr2Fpeak(GCparam['n'], GCresp['b1val'], GCresp['c1val'], Fr1)
@@ -142,6 +149,24 @@ def GCFBv23_SetParam(GCparam):
     
     GCresp['Fp1'] = np.vstack([fp1_low, fp1_high])
 
+    # ========== 计算 Fr2 (关键修改点) ==========
+    GCresp['frat0val'] = GCparam['frat'][0][0] * OneVec + GCparam['frat'][0][1] * GCresp['Ef']
+    GCresp['frat1val'] = GCparam['frat'][1][0] * OneVec + GCparam['frat'][1][1] * GCresp['Ef']
+    
+    GCresp['PcHPAF'] = (1 - GCresp['frat0val']) / GCresp['frat1val']
+    GCresp['frat0Pc'] = GCresp['frat0val'] + GCresp['frat1val'] * GCresp['PcHPAF']
+    
+    # 计算 Fr2
+    LvldB = GCparam.get('LeveldBscGCFB', 50)  # 默认 50 dB
+    fratVal = GCresp['frat0Pc'] + GCresp['frat1val'] * (LvldB - GCresp['PcHPAF'])
+    
+    #GCresp['Fr2'] = fratVal * GCresp['Fp1']  # 关键：计算 Fr2，避免 KeyError
+    GCresp['Fr2'] = fratVal[:, np.newaxis] * GCresp['Fp1'] # # 修正：保证 `fratVal` 的 shape 兼容 `Fp1`
+    # ========== 计算听力损失 ==========
+    GCparam = GCFBv23_HearingLoss(GCparam, GCresp)
+
+
+    
     # 调试信息
     print(f"[GCFBv23] 成功生成 {GCparam['NumCh']} 通道滤波器")
     print(f"          Fr1范围: {Fr1.min():.1f}Hz - {Fr1.max():.1f}Hz")
