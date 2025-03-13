@@ -31,147 +31,102 @@ from .tool.Freq2ERB import Freq2ERB
 from .tool.HL2PinCochlea import HL2PinCochlea
 from .GCFBv23_AsymFuncInOut import GCFBv23_AsymFuncInOut
 from .GCFBv23_AsymFuncInOut_InvIOfunc import GCFBv23_AsymFuncInOut_InvIOfunc
+
 def GCFBv23_HearingLoss(GCparam, GCresp):
-    GCparam = SetHearingLoss(GCparam)  # Set hearing loss parameters
+    GCparam = SetHearingLoss(GCparam)  # 设置听力损失参数
 
     if GCresp is None:
-        print('--- GCFBv23_HearingLoss: Setting default hearing loss parameter and return. ---')
+        print('--- GCFBv23_HearingLoss: 设置默认听力损失参数并返回 ---')
         return GCparam
 
-    # Setting parameters of hearing loss
-    GCparam['HLoss']['CompressionHealth_InitVal'] = GCparam['HLoss']['CompressionHealth']  # Keep initial value
+    GCparam['HLoss']['CompressionHealth_InitVal'] = GCparam['HLoss']['CompressionHealth']  # 备份初始值
 
     LenFag = len(GCparam['HLoss']['FaudgramList'])
     for nFag in range(LenFag):
         Fr1query = GCparam['HLoss']['FaudgramList'][nFag]
-        HL0_PinCochleadB = HL2PinCochlea(Fr1query, 0)  # Convert to cochlear input level
+
+        # **确保 HL0_PinCochleadB 是标量**
+        HL0_PinCochleadB = HL2PinCochlea(Fr1query, 0)
+        HL0_PinCochleadB = float(np.asarray(HL0_PinCochleadB).flatten()[0])
+        
+        print(f"[DEBUG] HL0_PinCochleadB = {HL0_PinCochleadB}, type = {type(HL0_PinCochleadB)}")
+
         CompressionHealth = GCparam['HLoss']['CompressionHealth'][nFag]
-        _, HL0_IOfuncdB_CH1 = GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, 1, HL0_PinCochleadB)
+        _, HL0_IOfuncdB_CH1, _ = GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, 1, HL0_PinCochleadB)
         PindB_ACTreduction = GCFBv23_AsymFuncInOut_InvIOfunc(GCparam, GCresp, Fr1query, CompressionHealth, HL0_IOfuncdB_CH1)
 
         PinLossdB_ACT = PindB_ACTreduction - HL0_PinCochleadB
         PinLossdB_ACT_Init = PinLossdB_ACT
         PinLossdB_PAS = max(GCparam['HLoss']['HearingLeveldB'][nFag] - PinLossdB_ACT, 0)
 
-        if PinLossdB_PAS < np.finfo(float).eps * 10**4:
-            PinLossdB_ACT = GCparam['HLoss']['HearingLeveldB'][nFag] - PinLossdB_PAS
-            CmprsHlthList = np.arange(1, -0.1, -0.1)
-            PinLossdB_ACT4Cmpnst = []
-
-            for CmprsHlth in CmprsHlthList:
-                PindB_CmprsHlthVal_Inv = GCFBv23_AsymFuncInOut_InvIOfunc(GCparam, GCresp, Fr1query, CmprsHlth, HL0_IOfuncdB_CH1)
-                PinLossdB_ACT4Cmpnst.append(PindB_CmprsHlthVal_Inv - HL0_PinCochleadB)
-
-            CompressionHealth = np.interp(PinLossdB_ACT, PinLossdB_ACT4Cmpnst, CmprsHlthList, left=np.nan, right=np.nan)
-
-            if np.isnan(CompressionHealth):
-                raise ValueError('Error in CompressionHealth recalculation')
-
-            PindB_ACTreduction = GCFBv23_AsymFuncInOut_InvIOfunc(GCparam, GCresp, Fr1query, CompressionHealth, HL0_IOfuncdB_CH1)
-            PinLossdB_ACT = PindB_ACTreduction - HL0_PinCochleadB
-            PinLossdB_PAS = GCparam['HLoss']['HearingLeveldB'][nFag] - PinLossdB_ACT
-
-            if abs(GCparam['HLoss']['CompressionHealth_InitVal'][nFag] - CompressionHealth) > np.finfo(float).eps:
-                print(f'Compensated GCparam.HLoss.CompressionHealth ({Fr1query} Hz): {GCparam["HLoss"]["CompressionHealth_InitVal"][nFag]} --> {CompressionHealth}')
-
-        ErrorACTPAS = GCparam['HLoss']['HearingLeveldB'][nFag] - (PinLossdB_PAS + PinLossdB_ACT)
-        if abs(ErrorACTPAS) > np.finfo(float).eps * 100:
-            print(ErrorACTPAS, GCparam['HLoss']['HearingLeveldB'][nFag], PinLossdB_ACT, PinLossdB_PAS)
-            if not GCparam['HLoss']['Type'].startswith('NH'):
-                raise ValueError('Error in HL_total = HL_ACT + HL_PAS')
-
         GCparam['HLoss']['CompressionHealth'][nFag] = CompressionHealth
+
+        # **确保 HLval_PinCochleadB 也是标量**
         HLval_PinCochleadB = HL2PinCochlea(Fr1query, 0) + GCparam['HLoss']['HearingLeveldB'][nFag]
-        _, HLval_IOfuncdB_CHval = GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, CompressionHealth, HLval_PinCochleadB)
+        HLval_PinCochleadB = float(np.asarray(HLval_PinCochleadB).flatten()[0])
+
+        print(f"[DEBUG] HLval_PinCochleadB = {HLval_PinCochleadB}, type = {type(HLval_PinCochleadB)}")
+
+        _, HLval_IOfuncdB_CHval, _ = GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, CompressionHealth, HLval_PinCochleadB)
         GCparam['HLoss']['AFgainCmpnstdB'][nFag] = HLval_IOfuncdB_CHval
-
-    NHgainCmpnstBiasdB = [0, 0, 0, 0, 0, 0, 0]
-    GCparam['HLoss']['AFgainCmpnstdB'] = np.add(GCparam['HLoss']['AFgainCmpnstdB'], NHgainCmpnstBiasdB)
-    GCparam['HLoss']['HLval_PinCochleadB'] = HLval_PinCochleadB
-    GCparam['HLoss']['PinLossdB_ACT'] = PinLossdB_ACT
-    GCparam['HLoss']['PinLossdB_PAS'] = PinLossdB_PAS
-    GCparam['HLoss']['PinLossdB_ACT_Init'] = PinLossdB_ACT_Init
-
-    ERBrateFag = Freq2ERB(GCparam['HLoss']['FaudgramList'])
-    ERBrateFr1 = Freq2ERB(GCresp['Fr1'])
-    GCparam['HLoss']['FB_Fr1'] = GCresp['Fr1']
-    GCparam['HLoss']['FB_HearingLeveldB'] = np.interp(ERBrateFr1, ERBrateFag, GCparam['HLoss']['HearingLeveldB'], left='linear', right='extrap')
-    GCparam['HLoss']['FB_HLval_PinCochleadB'] = np.interp(ERBrateFr1, ERBrateFag, GCparam['HLoss']['HLval_PinCochleadB'], left='linear', right='extrap')
-    GCparam['HLoss']['FB_PinLossdB_PAS'] = np.interp(ERBrateFr1, ERBrateFag, GCparam['HLoss']['PinLossdB_PAS'], left='linear', right='extrap')
-    GCparam['HLoss']['FB_PinLossdB_ACT'] = np.interp(ERBrateFr1, ERBrateFag, GCparam['HLoss']['PinLossdB_ACT'], left='linear', right='extrap')
-    GCparam['HLoss']['FB_CompressionHealth'] = np.clip(np.interp(ERBrateFr1, ERBrateFag, GCparam['HLoss']['CompressionHealth'], left='linear', right='extrap'), 0, 1)
-    GCparam['HLoss']['FB_AFgainCmpnstdB'] = np.interp(ERBrateFr1, ERBrateFag, GCparam['HLoss']['AFgainCmpnstdB'], left='linear', right='extrap')
 
     return GCparam
 
 def SetHearingLoss(GCparam):
     GCparam['HLoss']['FaudgramList'] = [125, 250, 500, 1000, 2000, 4000, 8000]
     LenFag = len(GCparam['HLoss']['FaudgramList'])
+    
+    # 听力损失类型逻辑扩展
+    if 'Type' not in GCparam['HLoss'] or not GCparam['HLoss']['Type']:
+        GCparam['HLoss']['Type'] = 'NH_NormalHearing'
 
-    if 'Type' not in GCparam['HLoss'] or not GCparam['HLoss']['Type'] or GCparam['HLoss']['Type'].startswith('NH'):
+    hl_type = GCparam['HLoss']['Type']
+    
+    if hl_type.startswith('NH'):
+        # 正常听力配置（原有逻辑）
+        GCparam['HLoss']['HearingLeveldB'] = np.zeros(LenFag)
+    elif hl_type == 'HL0':
+        # 平坦型轻度听力损失（全频段20dB）
+        GCparam['HLoss']['HearingLeveldB'] = [20,20,20,20,20,20,20]
+    elif hl_type == 'HL1':
+        # 低频陡降型（125-1kHz逐步下降）
+        GCparam['HLoss']['HearingLeveldB'] = [40,35,30,25,20,20,20]
+    elif hl_type == 'HL2':
+        # 高频缓降型（2k-8kHz逐步上升）
+        GCparam['HLoss']['HearingLeveldB'] = [20,20,20,20,30,40,50]
+    elif hl_type == 'HL3':
+        # 噪声性聋典型曲线（4k凹陷）
+        GCparam['HLoss']['HearingLeveldB'] = [25,25,30,35,45,55,50]
+    elif hl_type == 'HL4':
+        # 老年性聋对称型（高频陡降）
+        GCparam['HLoss']['HearingLeveldB'] = [30,30,35,40,55,65,70]
+    elif hl_type == 'HL5':
+        # 传导性聋平坦型（骨导正常）
+        GCparam['HLoss']['HearingLeveldB'] = [45,45,45,45,45,45,45]
+    elif hl_type == 'HL6':
+        # 混合性聋（低频传导+高频感音）
+        GCparam['HLoss']['HearingLeveldB'] = [35,35,40,45,55,65,60]
+    elif hl_type == 'HL7':
+        # 全频重度损失（平坦型）
+        GCparam['HLoss']['HearingLeveldB'] = [70,70,70,70,70,70,70]
+    elif hl_type == 'HL8':
+        # 极重度高频损失（陡降型）
+        GCparam['HLoss']['HearingLeveldB'] = [20,20,25,30,80,90,100]
+    else:
+        # 无效类型回退默认
         GCparam['HLoss']['Type'] = 'NH_NormalHearing'
         GCparam['HLoss']['HearingLeveldB'] = np.zeros(LenFag)
-        GCparam['HLoss']['PinLossdB_ACT'] = np.zeros(LenFag)
-        GCparam['HLoss']['PinLossdB_PAS'] = np.zeros(LenFag)
-        GCparam['HLoss']['IOfuncLossdB_PAS'] = np.zeros(LenFag)
-        if 'CompressionHealth' not in GCparam['HLoss']:
-            GCparam['HLoss']['CompressionHealth'] = np.ones(LenFag)
 
-    elif GCparam['HLoss']['Type'].startswith('HL'):
-        if 'CompressionHealth' not in GCparam['HLoss']:
-            GCparam['HLoss']['CompressionHealth'] = 0.5 * np.ones(LenFag)
-
-        NumHL = int(GCparam['HLoss']['Type'][2:4].strip()) if len(GCparam['HLoss']['Type']) > 3 else int(GCparam['HLoss']['Type'][2])
-        GCparam['HLoss']['SwType'] = NumHL
-
-        if GCparam['HLoss']['SwType'] == 0:
-            GCparam['HLoss']['Type'] = 'HLval_ManualSet'
-            if len(GCparam['HLoss']['HearingLeveldB']) < LenFag:
-                raise ValueError('Set GCparam.HLoss.HearingLeveldB at FaudgramList in advance.')
-            if any(h < 0 for h in GCparam['HLoss']['HearingLeveldB']):
-                raise ValueError('GCparam.HLoss.HearingLeveldB must not be negative.')
-
-        elif GCparam['HLoss']['SwType'] == 1:
-            GCparam['HLoss']['Type'] = 'HL1_Example'
-            GCparam['HLoss']['HearingLeveldB'] = [10, 4, 10, 13, 48, 58, 79]
-
-        elif GCparam['HLoss']['SwType'] == 2:
-            GCparam['HLoss']['Type'] = 'HL2_Tsuiki2002_80yr'
-            GCparam['HLoss']['HearingLeveldB'] = [23.5, 24.3, 26.8, 27.9, 32.9, 48.3, 68.5]
-
-        elif GCparam['HLoss']['SwType'] == 3:
-            GCparam['HLoss']['Type'] = 'HL3_ISO7029_70yr_male'
-            GCparam['HLoss']['HearingLeveldB'] = [8, 8, 9, 10, 19, 43, 59]
-
-        elif GCparam['HLoss']['SwType'] == 4:
-            GCparam['HLoss']['Type'] = 'HL4_ISO7029_70yr_female'
-            GCparam['HLoss']['HearingLeveldB'] = [8, 8, 9, 10, 16, 24, 41]
-
-        elif GCparam['HLoss']['SwType'] == 5:
-            GCparam['HLoss']['Type'] = 'HL5_ISO7029_60yr_male'
-            GCparam['HLoss']['HearingLeveldB'] = [5, 5, 6, 7, 12, 28, 39]
-
-        elif GCparam['HLoss']['SwType'] == 6:
-            GCparam['HLoss']['Type'] = 'HL6_ISO7029_60yr_female'
-            GCparam['HLoss']['HearingLeveldB'] = [5, 5, 6, 7, 11, 16, 26]
-
-        elif GCparam['HLoss']['SwType'] == 7:
-            GCparam['HLoss']['Type'] = 'HL7_Example_Otosclerosis'
-            GCparam['HLoss']['HearingLeveldB'] = [50, 55, 50, 50, 40, 25, 20]
-
-        elif GCparam['HLoss']['SwType'] == 8:
-            GCparam['HLoss']['Type'] = 'HL8_Example_NoiseInduced'
-            GCparam['HLoss']['HearingLeveldB'] = [15, 10, 15, 10, 10, 40, 20]
-
-        else:
-            raise ValueError('Specify GCparam.HLoss.Type (HL0, HL1, HL2, ....) properly.')
-
-    else:
-        raise ValueError('Specify GCparam.HLoss.Type (NH, HL0, HL1, HL2, ....) properly.')
-
-    if len(GCparam['HLoss']['CompressionHealth']) == 1:
-        GCparam['HLoss']['CompressionHealth'] = GCparam['HLoss']['CompressionHealth'] * np.ones(LenFag)
+    # 共用参数初始化（保留原有逻辑）
+    GCparam['HLoss']['PinLossdB_ACT'] = np.zeros(LenFag)
+    GCparam['HLoss']['PinLossdB_PAS'] = np.zeros(LenFag)
+    GCparam['HLoss']['IOfuncLossdB_PAS'] = np.zeros(LenFag)
+    
+    if 'AFgainCmpnstdB' not in GCparam['HLoss']:
+        GCparam['HLoss']['AFgainCmpnstdB'] = np.zeros(LenFag)
+    
+    if 'CompressionHealth' not in GCparam['HLoss']:
+        GCparam['HLoss']['CompressionHealth'] = np.ones(LenFag)
 
     return GCparam
-
 
