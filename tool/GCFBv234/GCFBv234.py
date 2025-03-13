@@ -51,23 +51,16 @@ def GCFBv234(SndIn, GCparam):
 
     print('-------------------- GCFBv234 --------------------')
 
-    # Startup directory setting
-    # StartupGCFB()  # Placeholder for any startup configuration
-
-    # Handling Input Parameters
     if SndIn.ndim != 1:
         raise ValueError('Check SndIn. It should be 1 ch (Monaural) and a single row vector.')
 
-    # Placeholder for GCFBv23_SetParam function
     GCparam, GCresp = GCFBv23_SetParam(GCparam)
     fs = GCparam['fs']
     NumCh = GCparam['NumCh']
     Tstart = time()
 
-    # Outer-Mid Ear Compensation
     if GCparam['OutMidCrct'].upper() != 'NO':
         print(f"*** Outer/Middle Ear correction (minimum phase) : {GCparam['OutMidCrct']} ***")
-        # Placeholder for MkFilterField2Cochlea function
         CmpnstOutMid, ParamF2C = MkFilterField2Cochlea(GCparam['OutMidCrct'], fs, 1)
         Snd = np.convolve(SndIn, CmpnstOutMid, mode='same')
         GCparam['Field2Cochlea'] = ParamF2C
@@ -76,40 +69,37 @@ def GCFBv234(SndIn, GCparam):
         print(f"*** {GCparam['Field2Cochlea']} ***")
         Snd = SndIn
 
-    # Gammachirp Calculation
     print('*** Gammmachirp Calculation ***')
-
-    # Placeholder for MakeAsymCmpFiltersV2 function
+    
+    # 调试信息：检查 GCresp['Fr2'] 是否有效
+    if 'Fr2' not in GCresp or GCresp['Fr2'] is None or len(GCresp['Fr2']) == 0:
+        raise ValueError("GCresp['Fr2'] is empty or not properly initialized!")
+    print(f"DEBUG: GCresp['Fr2'] shape={GCresp['Fr2'].shape}, content={GCresp['Fr2'][:10] if len(GCresp['Fr2']) > 10 else GCresp['Fr2']}")
+    
     ACFcoefFixed = MakeAsymCmpFiltersV2(fs, GCresp['Fr2'], GCresp['b2val'], GCresp['c2val'])
 
-    # Passive Gammachirp * Fixed HP-AF for level estimation
     pGCsmpl = np.zeros((NumCh, len(SndIn)))
     scGCsmpl = np.zeros((NumCh, len(SndIn)))
 
     print('--- Channel-by-channel processing of static filter ---')
     for nch in range(NumCh):
-        # Placeholder for GammaChirp function
         pgc = GammaChirp(GCresp['Fr1'][nch], fs, GCparam['n'], GCresp['b1val'][nch], GCresp['c1val'][nch], 0, '', 'peak')
         pGCsmpl[nch, :] = np.convolve(Snd, pgc, mode='same')
-
+        
         GCsmpl1 = pGCsmpl[nch, :]
         for Nfilt in range(4):
-            # Placeholder for filter function
             GCsmpl1 = filter(ACFcoefFixed['bz'][nch, :, Nfilt], ACFcoefFixed['ap'][nch, :, Nfilt], GCsmpl1)
         scGCsmpl[nch, :] = GCsmpl1
-
+        
         if nch == 0 or (nch + 1) % 50 == 0:
             elapsed_time = time() - Tstart
             print(f"Static (Fixed) Compressive-Gammachirp: ch #{nch + 1} / #{NumCh}. elapsed time = {elapsed_time:.1f} sec")
-
-    # Filtering of Dynamic HP-AF
+    
     if GCparam['Ctrl'].startswith('dyn'):
         if GCparam['DynHPAF']['StrPrc'].startswith('sample'):
-            # Placeholder for GCFBv23_SampleBase function
             dcGCsmpl, GCresp = GCFBv23_SampleBase(pGCsmpl, scGCsmpl, GCparam, GCresp)
             cGCout = dcGCsmpl
         elif GCparam['DynHPAF']['StrPrc'].startswith('frame'):
-            # Placeholder for GCFBv23_FrameBase function
             dcGCframe, GCresp = GCFBv23_FrameBase(pGCsmpl, scGCsmpl, GCparam, GCresp)
             cGCout = dcGCframe
         else:
@@ -118,11 +108,9 @@ def GCFBv234(SndIn, GCparam):
         cGCout = scGCsmpl
     else:
         raise ValueError('Specify GCparam.Ctrl properly')
-
-    # Signal path Gain Normalization at Reference Level (GainRefdB)
+    
     LenOut = cGCout.shape[1]
     if isinstance(GCparam['GainRefdB'], (int, float)):
-        # Placeholder for CmprsGCFrsp function
         cGCRef = CmprsGCFrsp(GCresp['Fr1'], fs, GCparam['n'], GCresp['b1val'], GCresp['c1val'], GCresp['frat'], GCresp['b2val'], GCresp['c2val'])
         GCresp['GainFactor'] = 10**(GCparam['GainCmpnstdB'] / 20) * cGCRef['NormFctFp2']
         GCresp['cGCRef'] = cGCRef
