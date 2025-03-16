@@ -46,10 +46,18 @@ def GammaChirp(Frs, SR, OrderG=None, CoefERBw=None, CoefC=None, Phase=None, SwCa
     else:
         CoefC = np.asarray(CoefC, dtype=np.float64).flatten()
     
+    # if Phase is None:
+    #     Phase = np.zeros(NumCh, dtype=np.float64)
+    # else:
+    #     Phase = np.asarray(Phase, dtype=np.float64).flatten()
+
     if Phase is None:
-        Phase = np.zeros(NumCh, dtype=np.float64)
+        Phase = 0  # 对应 MATLAB 代码中的 `if length(Phase) == 0, Phase = 0;`   
+    if isinstance(Phase, (int, float)):
+        Phase = np.full(NumCh, Phase, dtype=np.float64)  # 对应 `Phase = Phase*ones(NumCh,1);`
     else:
-        Phase = np.asarray(Phase, dtype=np.float64).flatten()
+        Phase = np.asarray(Phase, dtype=np.float64).flatten()  # 确保是 NumPy 数组
+        
     
     if SwCarr is None:
         SwCarr = 'cos'
