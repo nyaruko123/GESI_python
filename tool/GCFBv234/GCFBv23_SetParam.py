@@ -108,6 +108,10 @@ def GCFBv23_SetParam(GCparam):
     if GCparam['DynHPAF']['ValWin'].sum() != 0:
         GCparam['DynHPAF']['ValWin'] /= np.sum(GCparam['DynHPAF']['ValWin'])
 
+    
+    # ================== 修复 KeyError: 'HLoss' ==================
+    GCparam.setdefault('HLoss', {})  # 确保 HLoss 这个字典存在
+    GCparam['HLoss'].setdefault('FB_CompressionHealth', 1)  # 默认设为 1（与 MATLAB 代码一致）
 
     
     # ================== 关键参数生成 ==================
