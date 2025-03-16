@@ -48,7 +48,9 @@ def CmprsGCFrsp(Fr1, fs=48000, n=4, b1=1.81, c1=-2.96, frat=1, b2=2.17, c2=2.20,
     if np.isscalar(c2):
         c2 = np.full(NumCh, c2)
 
-    pGCFrsp, freq = GammaChirpFrsp(Fr1, fs, n, b1, c1, 0, NfrqRsl)  # Undefined function
+    #pGCFrsp, freq = GammaChirpFrsp(Fr1, fs, n, b1, c1, 0, NfrqRsl)  # Undefined function\
+    pGCFrsp, freq, _, _, _ = GammaChirpFrsp(Fr1, fs, n, b1, c1, 0, NfrqRsl)
+
     Fp1 = Fr2Fpeak(n, b1, c1, Fr1)  # Undefined function
     Fr2 = frat * Fp1
     ACFFrsp, freq, AsymFunc = AsymCmpFrspV2(Fr2, fs, b2, c2, NfrqRsl)  # Undefined function
