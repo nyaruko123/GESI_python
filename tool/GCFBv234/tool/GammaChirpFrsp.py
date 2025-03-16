@@ -50,7 +50,10 @@ def GammaChirpFrsp(Frs, SR=48000, OrderG=4, CoefERBw=1.019, CoefC=0, Phase=None,
     cn = (CoefC / OrderG)[:, np.newaxis] * one1
     n = OrderG[:, np.newaxis] * one1
     c = CoefC[:, np.newaxis] * one1
-    Phase = Phase[:, np.newaxis] * one1
+    
+    #Phase = Phase[:, np.newaxis] * one1
+    Phase = np.asarray(Phase, dtype=np.float64).flatten()[:, np.newaxis] * one1
+
 
     AmpFrsp = ((1 + cn**2) / (1 + (fd / bh)**2))**(n / 2) * np.exp(c * (np.arctan(fd / bh) - np.arctan(cn)))
 
