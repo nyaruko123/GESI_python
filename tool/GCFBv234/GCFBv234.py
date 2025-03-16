@@ -67,16 +67,18 @@ def GCFBv234(SndIn, GCparam):
     else:
         GCparam['Field2Cochlea'] = 'No Outer/Middle Ear correction'
         print(f"*** {GCparam['Field2Cochlea']} ***")
-        Snd = SndIn
+        Snd = np.asarray(SndIn, dtype=np.float64)
 
     print('*** Gammmachirp Calculation ***')
     
-    # 调试信息：检查 GCresp['Fr2'] 是否有效
     if 'Fr2' not in GCresp or GCresp['Fr2'] is None or len(GCresp['Fr2']) == 0:
         raise ValueError("GCresp['Fr2'] is empty or not properly initialized!")
-    print(f"DEBUG: GCresp['Fr2'] shape={GCresp['Fr2'].shape}, content={GCresp['Fr2'][:10] if len(GCresp['Fr2']) > 10 else GCresp['Fr2']}")
     
-    ACFcoefFixed = MakeAsymCmpFiltersV2(fs, GCresp['Fr2'], GCresp['b2val'], GCresp['c2val'])
+    # 正确解包 `MakeAsymCmpFiltersV2` 返回的多个值
+    ACFcoefFixed, ACFcoefConv = MakeAsymCmpFiltersV2(fs, GCresp['Fr2'], GCresp['b2val'], GCresp['c2val'])
+    
+    # 调试信息，确保 ACFcoefFixed 是字典
+    print(f"DEBUG: ACFcoefFixed type = {type(ACFcoefFixed)}")
 
     pGCsmpl = np.zeros((NumCh, len(SndIn)))
     scGCsmpl = np.zeros((NumCh, len(SndIn)))
@@ -84,11 +86,27 @@ def GCFBv234(SndIn, GCparam):
     print('--- Channel-by-channel processing of static filter ---')
     for nch in range(NumCh):
         pgc = GammaChirp(GCresp['Fr1'][nch], fs, GCparam['n'], GCresp['b1val'][nch], GCresp['c1val'][nch], 0, '', 'peak')
+        
+        # print(f"DEBUG: nch={nch}, type={type(pgc)}, len={len(pgc) if isinstance(pgc, list) else 'N/A'}, shape={np.shape(pgc)}")
+        
+        if isinstance(pgc, tuple):
+            pgc = pgc[0]  # 只取第一个返回值
+
+        pgc = np.asarray(pgc, dtype=np.float64)
+        
+        if pgc.ndim > 1:
+            pgc = pgc.ravel()
+        
+        Snd = np.asarray(Snd, dtype=np.float64)
+        
+        if Snd.size == 0 or pgc.size == 0:
+            raise ValueError(f"Error: Empty array detected! Snd.size={Snd.size}, pgc.size={pgc.size}")
+        
         pGCsmpl[nch, :] = np.convolve(Snd, pgc, mode='same')
         
         GCsmpl1 = pGCsmpl[nch, :]
         for Nfilt in range(4):
-            GCsmpl1 = filter(ACFcoefFixed['bz'][nch, :, Nfilt], ACFcoefFixed['ap'][nch, :, Nfilt], GCsmpl1)
+            GCsmpl1 = np.convolve(GCsmpl1, ACFcoefFixed['bz'][nch, :, Nfilt], mode='same')
         scGCsmpl[nch, :] = GCsmpl1
         
         if nch == 0 or (nch + 1) % 50 == 0:
