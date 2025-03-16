@@ -10,7 +10,7 @@ def GCFBv23_SetParam(GCparam):
     GCparam.setdefault('fs', 48000)
     GCparam.setdefault('OutMidCrct', 'ELC')
     GCparam.setdefault('NumCh', 100)
-    GCparam.setdefault('FRange', [100, 6000])
+    GCparam.setdefault('FRange', [100, 6000])     
     
     # 参数校验增强
     if not isinstance(GCparam['NumCh'], int) or GCparam['NumCh'] < 1:
@@ -78,6 +78,38 @@ def GCFBv23_SetParam(GCparam):
         GCresp['ERBw2'] = np.tile(24.7 * (4.37 * (Fr1_safe / 1000.0) + 1.0), (2, 1))
         GCresp['ERBw2'] = np.nan_to_num(GCresp['ERBw2'], nan=24.7)
 
+    # ================== 修复 KeyError: 'LvlEst' ==================
+    GCparam.setdefault('LvlEst', {})
+    GCparam['LvlEst'].setdefault('ExpDecayVal', 0.5)  # decay exponential 默认值
+    GCparam['LvlEst'].setdefault('LctERB', 1.5)
+    GCparam['LvlEst'].setdefault('DecayHL', 0.5)
+    GCparam['LvlEst'].setdefault('b2', GCparam['b2'][0][0])
+    GCparam['LvlEst'].setdefault('c2', GCparam['c2'][0][0])
+    GCparam['LvlEst'].setdefault('frat', 1.08)
+    GCparam['LvlEst'].setdefault('RMStoSPLdB', 30)
+    GCparam['LvlEst'].setdefault('Weight', 0.5)
+    GCparam['LvlEst'].setdefault('RefdB', 50)
+    GCparam['LvlEst'].setdefault('Pwr', [1.5, 0.5])
+    
+    # ================== 修复 KeyError: 'DynHPAF' ==================
+    GCparam.setdefault('DynHPAF', {})  # 确保 DynHPAF 存在
+    
+    # 设定默认的帧处理参数
+    GCparam['DynHPAF'].setdefault('StrPrc', 'sample-by-sample')  # 默认逐样本处理
+    GCparam['DynHPAF'].setdefault('Tframe', 0.001)  # 默认帧长 1ms
+    GCparam['DynHPAF'].setdefault('Tshift', 0.0005)  # 默认帧移 0.5ms
+    GCparam['DynHPAF'].setdefault('LenFrame', int(GCparam['DynHPAF']['Tframe'] * GCparam['fs']))  # 帧长度
+    GCparam['DynHPAF'].setdefault('LenShift', int(GCparam['DynHPAF']['Tshift'] * GCparam['fs']))  # 帧移长度
+    GCparam['DynHPAF'].setdefault('fs', 1 / GCparam['DynHPAF']['Tshift'])  # 帧移采样率
+    GCparam['DynHPAF'].setdefault('NameWin', 'hanning')  # 窗函数类型
+    GCparam['DynHPAF'].setdefault('ValWin', np.hanning(GCparam['DynHPAF']['LenFrame']))  # 默认窗口
+    
+    # 确保窗口值归一化，防止 NaN
+    if GCparam['DynHPAF']['ValWin'].sum() != 0:
+        GCparam['DynHPAF']['ValWin'] /= np.sum(GCparam['DynHPAF']['ValWin'])
+
+
+    
     # ================== 关键参数生成 ==================
     # 基础参数计算
     OneVec = np.ones(GCparam['NumCh'])
