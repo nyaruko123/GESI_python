@@ -43,7 +43,6 @@ def GCFBv23_SetParam(GCparam):
         raise ValueError('控制模式错误: 应为"static", "dynamic"或"level-estimation"')
 
     # ================== 频率生成核心逻辑 ==================
-    # 生成基础频率参数
     freq_result = EqualFreqScale('ERB', GCparam['NumCh'], GCparam['FRange'])
     if not (isinstance(freq_result, (tuple, list)) and len(freq_result) >= 2):
         raise ValueError("EqualFreqScale返回结构异常，应返回(Fr1, ERBrate1)")
@@ -92,111 +91,103 @@ def GCFBv23_SetParam(GCparam):
     GCparam['LvlEst'].setdefault('Pwr', [1.5, 0.5])
     
     # ================== 修复 KeyError: 'DynHPAF' ==================
-    GCparam.setdefault('DynHPAF', {})  # 确保 DynHPAF 存在
-    
-    # 设定默认的帧处理参数
-    GCparam['DynHPAF'].setdefault('StrPrc', 'sample-by-sample')  # 默认逐样本处理
-    GCparam['DynHPAF'].setdefault('Tframe', 0.001)  # 默认帧长 1ms
-    GCparam['DynHPAF'].setdefault('Tshift', 0.0005)  # 默认帧移 0.5ms
-    GCparam['DynHPAF'].setdefault('LenFrame', int(GCparam['DynHPAF']['Tframe'] * GCparam['fs']))  # 帧长度
-    GCparam['DynHPAF'].setdefault('LenShift', int(GCparam['DynHPAF']['Tshift'] * GCparam['fs']))  # 帧移长度
-    GCparam['DynHPAF'].setdefault('fs', 1 / GCparam['DynHPAF']['Tshift'])  # 帧移采样率
-    GCparam['DynHPAF'].setdefault('NameWin', 'hanning')  # 窗函数类型
-    GCparam['DynHPAF'].setdefault('ValWin', np.hanning(GCparam['DynHPAF']['LenFrame']))  # 默认窗口
+    GCparam.setdefault('DynHPAF', {})
+    GCparam['DynHPAF'].setdefault('StrPrc', 'sample-by-sample')
+    GCparam['DynHPAF'].setdefault('Tframe', 0.001)
+    GCparam['DynHPAF'].setdefault('Tshift', 0.0005)
+    GCparam['DynHPAF'].setdefault('LenFrame', int(GCparam['DynHPAF']['Tframe'] * GCparam['fs']))
+    GCparam['DynHPAF'].setdefault('LenShift', int(GCparam['DynHPAF']['Tshift'] * GCparam['fs']))
+    GCparam['DynHPAF'].setdefault('fs', 1 / GCparam['DynHPAF']['Tshift'])
+    GCparam['DynHPAF'].setdefault('NameWin', 'hanning')
+    GCparam['DynHPAF'].setdefault('ValWin', np.hanning(GCparam['DynHPAF']['LenFrame']))
     
     # 确保窗口值归一化，防止 NaN
     if GCparam['DynHPAF']['ValWin'].sum() != 0:
         GCparam['DynHPAF']['ValWin'] /= np.sum(GCparam['DynHPAF']['ValWin'])
 
-    
     # ================== 修复 KeyError: 'HLoss' ==================
-    GCparam.setdefault('HLoss', {})  # 确保 HLoss 这个字典存在
-    GCparam['HLoss'].setdefault('FB_CompressionHealth', 1)  # 默认设为 1（与 MATLAB 代码一致）
+    GCparam.setdefault('HLoss', {})
+    GCparam['HLoss'].setdefault('FB_CompressionHealth', 1)
 
-    
     # ================== 关键参数生成 ==================
-    # 基础参数计算
     OneVec = np.ones(GCparam['NumCh'])
     GCresp['b1val'] = GCparam['b1'][0] * OneVec + GCparam['b1'][1] * GCresp['Ef']
     GCresp['c1val'] = GCparam['c1'][0] * OneVec + GCparam['c1'][1] * GCresp['Ef']
 
-    # ================== 新增核心修复：b2val/c2val计算 ==================
-    # 计算b2val (动态参数)
+    # ================== b2val/c2val计算 ==================
     GCresp['b2val'] = np.array([
         GCparam['b2'][0][0] * OneVec + GCparam['b2'][0][1] * GCresp['Ef'],
         GCparam['b2'][1][0] * OneVec + GCparam['b2'][1][1] * GCresp['Ef']
     ])
-    # 计算c2val (动态参数)
     GCresp['c2val'] = np.array([
         GCparam['c2'][0][0] * OneVec + GCparam['c2'][0][1] * GCresp['Ef'],
         GCparam['c2'][1][0] * OneVec + GCparam['c2'][1][1] * GCresp['Ef']
     ])
-    # 维度断言
     assert GCresp['b2val'].shape == (2, GCparam['NumCh']), f"b2val维度错误: {GCresp['b2val'].shape}"
     assert GCresp['c2val'].shape == (2, GCparam['NumCh']), f"c2val维度错误: {GCresp['c2val'].shape}"
 
-    # ================== 动态参数计算修复部分 ==================
-    # frat参数计算
+    # ================== 动态参数计算部分 ==================
     GCresp['frat0val'] = GCparam['frat'][0][0] * OneVec + GCparam['frat'][0][1] * GCresp['Ef']
     GCresp['frat1val'] = GCparam['frat'][1][0] * OneVec + GCparam['frat'][1][1] * GCresp['Ef']
     
-    # PcHPAF计算及维度扩展
+    # PcHPAF: (2, NumCh)
     GCresp['PcHPAF'] = (1 - GCresp['frat0val']) / GCresp['frat1val']
-    GCresp['PcHPAF'] = np.tile(GCresp['PcHPAF'], (2, 1))  # 维度扩展为(2, NumCh)
-    
-    # frat0Pc生成
+    GCresp['PcHPAF'] = np.tile(GCresp['PcHPAF'], (2, 1))
+    # frat0Pc: (2, NumCh)
     GCresp['frat0Pc'] = GCresp['frat0val'] + GCresp['frat1val'] * GCresp['PcHPAF']
 
-    # ================== 维度对齐修复核心 ==================
-    # Fp1生成增强
+    # Fp1生成
     try:
         fp1_low, fp1_high = Fr2Fpeak(GCparam['n'], GCresp['b1val'], GCresp['c1val'], Fr1)
-        GCresp['Fp1'] = np.vstack([fp1_low, fp1_high])
+        GCresp['Fp1'] = np.vstack([fp1_low, fp1_high])  # (2, NumCh)
         assert GCresp['Fp1'].shape == (2, GCparam['NumCh']), f"Fp1维度异常: {GCresp['Fp1'].shape}"
     except Exception as e:
         raise RuntimeError(f"Fp1生成失败: {str(e)}")
 
-    # ================== 动态参数计算 ==================
     LvldB = GCparam.get('LeveldBscGCFB', 50)
-    
-    # 调试维度信息
     print(f"[维度校验] frat0Pc形状: {GCresp['frat0Pc'].shape}")
     print(f"[维度校验] frat1val形状: {GCresp['frat1val'].shape}")
     print(f"[维度校验] PcHPAF形状: {GCresp['PcHPAF'].shape}")
 
-    # 计算fratVal
+    # fratVal: (2, NumCh)
     fratVal = GCresp['frat0Pc'] + GCresp['frat1val'] * (LvldB - GCresp['PcHPAF'])
-    
-    # 维度对齐处理增强
     if fratVal.ndim == 1:
         fratVal = np.tile(fratVal, (2, 1))
     elif fratVal.shape[0] != 2:
         fratVal = fratVal.T
+    assert fratVal.shape == GCresp['Fp1'].shape, f"维度不匹配: fratVal{fratVal.shape} vs Fp1{GCresp['Fp1'].shape}"
 
-    # 维度断言
-    assert fratVal.shape == GCresp['Fp1'].shape, \
-        f"维度不匹配: fratVal{fratVal.shape} vs Fp1{GCresp['Fp1'].shape}"
+    # ========== 这里是原代码把 (2,NumCh) reshape 为 (2*NumCh,1) 的关键部分 ==========
+    # 原版: 
+    #   Fr2_temp = fratVal * GCresp['Fp1']  # => (2, NumCh)
+    #   GCresp['Fr2'] = Fr2_temp.reshape(-1,1,order='F').squeeze()[:, np.newaxis]  # => (2*NumCh,1)
+    # 导致后续只能匹配 200 通道
+    
+    # -- 替换方案: 做平均，得到 (NumCh,) 并加 .reshape(-1,1) => (NumCh,1) --
+    Fr2_temp = fratVal * GCresp['Fp1']  # shape => (2, NumCh)
 
-    # ================== 最终计算阶段 ==================
-    # GCresp['Fr2'] = fratVal * GCresp['Fp1']
-    # GCresp['Fr2'] = GCresp['Fr2'].T.reshape(-1, 1)  # 强制转换为列向量
-    # GCresp['Fr2'] = (fratVal * GCresp['Fp1']).flatten(order='F')[:, np.newaxis]  # 确保列优先展开
-    Fr2_temp = fratVal * GCresp['Fp1']
-    if isinstance(Fr2_temp, tuple):  # 防止返回元组
-        Fr2_temp = np.array(Fr2_temp[0]) 
-    GCresp['Fr2'] = Fr2_temp.reshape(-1, 1, order='F').squeeze()[:, np.newaxis]
+    # 如果需要只用第0行: 
+    #   Fr2_single = Fr2_temp[0, :]
+    #   GCresp['Fr2'] = Fr2_single[:, np.newaxis]
+    
+    # 如果需要只用第1行:
+    #   Fr2_single = Fr2_temp[1, :]
+    #   GCresp['Fr2'] = Fr2_single[:, np.newaxis]
+    
+    # 这里示例: **两行做平均** => shape (NumCh,)
+    Fr2_avg = 0.5 * (Fr2_temp[0, :] + Fr2_temp[1, :])  
+    # 变成 (NumCh,1)
+    GCresp['Fr2'] = Fr2_avg[:, np.newaxis]
     GCresp['Fr2'] = np.asarray(GCresp['Fr2'], dtype=np.float64)  # 强制类型
     
-    # 调试输出
     print(f"[维度追踪] fratVal形状: {fratVal.shape} → Fp1形状: {GCresp['Fp1'].shape}")
     print(f"[最终输出] Fr2维度: {GCresp['Fr2'].shape}")
 
     # ================== 后处理阶段 ==================
     GCparam = GCFBv23_HearingLoss(GCparam, GCresp)
 
-    # 状态输出
     print(f"[系统状态] 成功生成 {GCparam['NumCh']} 通道滤波器")
     print(f"          频率范围: {Fr1.min():.1f}Hz - {Fr1.max():.1f}Hz")
     print(f"          ERB空间均值: {GCresp['ERBspace1']:.2f} ERB")
 
-    return GCparam, GCresp  # 修正中文括号为英文
+    return GCparam, GCresp
