@@ -27,6 +27,10 @@ Note:
 import numpy as np
 
 def Metric2Pcorrect_Sigmoid(Metric, ParamSigmoid):
+    # 如果 Metric 是标量，则转换为列表
+    if np.isscalar(Metric):
+        Metric = [Metric]
+        
     LenMetric = len(Metric)
     LenPS = len(ParamSigmoid)
 
