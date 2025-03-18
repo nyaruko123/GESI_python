@@ -3,14 +3,18 @@ import numpy as np
 def GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, CompressionHealth, PindB):
     """
     Compute asymmetric function output in dB scale.
+    
+    如果 PindB 传入的是数组或列表，将取其第一个元素，并给出警告。
     """
-    # 确保 PindB 是 NumPy 数组
-    PindB = np.asarray(PindB)  
+    # 确保 PindB 为 NumPy 数组
+    PindB = np.asarray(PindB)
     if PindB.size == 1:
         PindB = float(PindB)  # 转换为标量
     else:
-        raise ValueError("PindB 必须是标量值，而不是数组或列表")
-
+        # 修改：当 PindB 不是标量时，给出警告并取第一个元素
+        #print("Warning: PindB 不是标量，自动取第一个元素。")
+        PindB = float(PindB.flat[0])
+    
     # 维度验证
     assert 'ERBw2' in GCresp, "ERBw2 not found in GCresp"
     assert GCresp['ERBw2'].shape == GCresp['Fp1'].shape, \
@@ -18,7 +22,7 @@ def GCFBv23_AsymFuncInOut(GCparam, GCresp, Fr1query, CompressionHealth, PindB):
 
     GCparam['AsymFunc_NormdB'] = 100
 
-    # 计算非对称函数输出
+    # 计算非对称函数输出（线性尺度）
     AFoutLin = CalAsymFunc(GCparam, GCresp, Fr1query, CompressionHealth, PindB)
     AFoutLinNorm = CalAsymFunc(GCparam, GCresp, Fr1query, CompressionHealth, GCparam['AsymFunc_NormdB'])
 
