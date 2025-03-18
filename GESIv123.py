@@ -11,7 +11,7 @@ from tool.F0limit2SSIweight import F0limit2SSIweight
 from tool.Metric2Pcorrect_Sigmoid import Metric2Pcorrect_Sigmoid
 from tool.GCFBv234.tool.Eqlz2MeddisHCLevel import Eqlz2MeddisHCLevel
 from tool.GCFBv234.tool.EqlzGCFB2Rms1at0dB import EqlzGCFB2Rms1at0dB
-from tool.world_0_2_4_matlab import Harvest
+from tool.world_0_2_4_matlab.Harvest import Harvest
 
 
 
@@ -151,7 +151,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     DirNameTest = os.path.join(GESIparam['DirGCout'], f'{GESIparam["NameGCoutTest"]}.mat')
     if not os.path.exists(DirNameTest):
         print('==== GCFB calculation of SndTest (HL or NH) ====')
-        GCoutTest, _, GCparamTest = GCFBv234(SndTest, GCparam)
+        GCoutTest, _, GCparamTest,GCrespTest = GCFBv234(SndTest, GCparam)
         NumCh, LenFrame = GCoutTest.shape
         GCoutTest = EqlzGCFB2Rms1at0dB(GCoutTest, GCparam['StrFloor'])
 
@@ -182,7 +182,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     if not os.path.exists(DirNameRef):
         print('==== GCFB calculation of SndRef (always NH) ====')
         GCparam['HLoss']['Type'] = 'NH'
-        GCoutRef, _, GCparamRef = GCFBv234(SndRef, GCparam)
+        GCoutRef, _, GCparamRef,GCrespRef = GCFBv234(SndRef, GCparam)
         NumCh, LenFrame = GCoutRef.shape
         GCoutRef = EqlzGCFB2Rms1at0dB(GCoutRef, GCparam['StrFloor'])
         tFrame = np.arange(LenFrame) / GCparamRef['DynHPAF']['fs']
