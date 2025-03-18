@@ -115,7 +115,7 @@ def GCFBv23_SetParam(GCparam):
     
     # ================== 修复 KeyError: 'HLoss' ==================
     GCparam.setdefault('HLoss', {})  # 确保 HLoss 这个字典存在
-    # 修改：FB_CompressionHealth默认值设为NumCh个1的数组，便于后续下标索引
+    # 修改：FB_CompressionHealth默认值设为NumCh个1的数组
     GCparam['HLoss'].setdefault('FB_CompressionHealth', np.ones(GCparam['NumCh']))
     
     # ================== 关键参数生成 ==================
@@ -185,5 +185,8 @@ def GCFBv23_SetParam(GCparam):
     print(f"[系统状态] 成功生成 {GCparam['NumCh']} 通道滤波器")
     print(f"          频率范围: {Fr1.min():.1f}Hz - {Fr1.max():.1f}Hz")
     print(f"          ERB空间均值: {GCresp['ERBspace1']:.2f} ERB")
+    
+    # --- 新增：将 frat 值存入 GCresp，便于后续调用使用 ---
+    GCresp['frat'] = GCparam['LvlEst']['frat']
     
     return GCparam, GCresp
