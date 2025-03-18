@@ -60,9 +60,13 @@ def Harvest(x, fs, option=None):
     temporal_positions = np.arange(0, len(x) / fs, frame_period / 1000)
     f0_parameter = {}
     f0_parameter['temporal_positions'] = temporal_positions
-    f0_parameter['f0'] = smoothed_f0[min(len(smoothed_f0) - 1,
-        round(temporal_positions * 1000)) + 1]
-    f0_parameter['vuv'] = vuv[min(len(smoothed_f0) - 1, round(temporal_positions * 1000)) + 1]
+
+    # 将 temporal_positions 转换为索引：
+    # 这里假设索引 = np.round(temporal_positions * 1000).astype(int) + 1
+    # 为避免超出范围，用 np.clip 限制在 0 到 len(smoothed_f0)-1 之间
+    indices = np.clip(np.round(temporal_positions * 1000).astype(int) + 1, 0, len(smoothed_f0) - 1)
+    f0_parameter['f0'] = smoothed_f0[indices]
+    f0_parameter['vuv'] = vuv[indices]
     f0_parameter['f0_candidates'] = f0_candidates
     # f0_parameter['f0_candidates_score'] = f0_candidates_score;
 
@@ -96,22 +100,15 @@ def RemoveUnreliableCandidates(f0_candidates, f0_scores):
 
 
 def OverlapF0Candidates(f0_candidates, max_candidates):
-    # 重叠 F0 候选
-    n = 3  # 这是优化参数
-
-    if max_candidates == 0:
-        new_f0_candidates = np.zeros((1, f0_candidates.shape[1]))  # 返回全零矩阵
-        return new_f0_candidates
-
-    number_of_candidates = n * 2 + 1
-    new_f0_candidates = np.zeros((max_candidates * number_of_candidates, f0_candidates.shape[1]))
-
-    for i in range(number_of_candidates):
-        st = max(-(i - n) + 1, 1)  # 起始索引
-        ed = min(-(i - n), 0)  # 结束索引
-        new_f0_candidates[(1 + i * max_candidates):(1 + (i + 1) * max_candidates), st - 1:] = \
-            f0_candidates[0:max_candidates, -ed + 1:f0_candidates.shape[1] - (st - 1)]
-
+    """
+    对 F0 候选进行重叠处理。
+    这里采用简单的策略：将 f0_candidates 沿行方向重复 number_of_candidates 次，
+    其中 number_of_candidates = n * 2 + 1，n 固定为 3。
+    """
+    n = 3  # 优化参数
+    number_of_candidates = n * 2 + 1  # 7
+    # f0_candidates 假设形状为 (max_candidates, L)
+    new_f0_candidates = np.tile(f0_candidates, (number_of_candidates, 1))
     return new_f0_candidates
 
 
@@ -119,12 +116,18 @@ def GetDownsampledSignal(x, fs, target_fs):
     # 获取下采样信号
     decimation_ratio = round(fs / target_fs)
 
+    # 确保 x 是二维数组（列向量）
+    if x.ndim == 1:
+        x = x.reshape(-1, 1)
+
     if fs <= target_fs:
         y = x[:, 0]  # 如果目标采样率大于等于原采样率，直接返回原信号
         actual_fs = fs
     else:
         offset = np.ceil(140 / decimation_ratio) * decimation_ratio
+        # 延伸信号：用二维数组保证维度匹配
         x = np.concatenate((np.ones((int(offset), 1)) * x[0], x, np.ones((int(offset), 1)) * x[-1]), axis=0)
+        # 对 x 的第一列进行下采样
         y0 = decimate(x[:, 0], decimation_ratio, ftype='fir')  # 使用 FIR 滤波器进行下采样
         actual_fs = fs / decimation_ratio
         y = y0[int(offset / decimation_ratio): -int(offset / decimation_ratio)]
@@ -186,7 +189,13 @@ def GetF0CandidateFromRawEvent(boundary_f0, fs, y_spectrum, y_length, temporal_p
     spectrum_low_pass_filter = np.fft.fft(band_pass_filter, n=len(y_spectrum))  # 计算低通滤波器的 FFT
 
     filtered_signal = np.real(np.fft.ifft(spectrum_low_pass_filter * y_spectrum))  # 反 FFT 得到滤波信号
-    filtered_signal = filtered_signal[index_bias + np.arange(1, y_length + 1)]  # 截取有效信号
+
+    # 构造要截取的索引数组：从 index_bias 开始，长度为 y_length
+    indices = index_bias + np.arange(y_length)  # 生成索引数组
+    # 如果最后一个索引超出数组边界，则只取有效部分
+    if indices[-1] >= filtered_signal.shape[0]:
+        indices = indices[indices < filtered_signal.shape[0]]
+    filtered_signal = filtered_signal[indices]
 
     # 计算四种事件
     negative_zero_cross = ZeroCrossingEngine(filtered_signal, fs)  # 负零交叉
@@ -197,7 +206,6 @@ def GetF0CandidateFromRawEvent(boundary_f0, fs, y_spectrum, y_length, temporal_p
     f0_candidate = GetF0CandidateContour(negative_zero_cross, positive_zero_cross, peak, dip, temporal_positions)  # 获取 F0 候选轮廓
 
     # 移除不可靠的候选
-    # 1.1 和 0.9 是固定参数
     f0_candidate[f0_candidate > boundary_f0 * 1.1] = 0
     f0_candidate[f0_candidate < boundary_f0 * 0.9] = 0
     f0_candidate[f0_candidate > f0_ceil] = 0
@@ -211,35 +219,47 @@ def GetF0CandidateFromRawEvent(boundary_f0, fs, y_spectrum, y_length, temporal_p
 def GetF0CandidateContour(negative_zero_cross, positive_zero_cross, peak, dip, temporal_positions):
     # 获取 F0 候选轮廓
     usable_channel = (
-            max(0, len(negative_zero_cross.interval_locations) - 2) *
-            max(0, len(positive_zero_cross.interval_locations) - 2) *
-            max(0, len(peak.interval_locations) - 2) *
-            max(0, len(dip.interval_locations) - 2)
+        max(0, len(negative_zero_cross["interval_locations"]) - 2) *
+        max(0, len(positive_zero_cross["interval_locations"]) - 2) *
+        max(0, len(peak["interval_locations"]) - 2) *
+        max(0, len(dip["interval_locations"]) - 2)
     )
 
     if usable_channel > 0:
         interpolated_f0_list = np.zeros((4, len(temporal_positions)))  # 初始化插值 F0 列表
 
         # 线性插值
-        interpolated_f0_list[0, :] = np.interp(temporal_positions,
-                                               negative_zero_cross.interval_locations,
-                                               negative_zero_cross.interval_based_f0,
-                                               left=np.nan, right=np.nan)  # 负零交叉的插值
+        interpolated_f0_list[0, :] = np.interp(
+            temporal_positions,
+            negative_zero_cross["interval_locations"],
+            negative_zero_cross["interval_based_f0"],
+            left=np.nan,
+            right=np.nan
+        )  # 负零交叉的插值
 
-        interpolated_f0_list[1, :] = np.interp(temporal_positions,
-                                               positive_zero_cross.interval_locations,
-                                               positive_zero_cross.interval_based_f0,
-                                               left=np.nan, right=np.nan)  # 正零交叉的插值
+        interpolated_f0_list[1, :] = np.interp(
+            temporal_positions,
+            positive_zero_cross["interval_locations"],
+            positive_zero_cross["interval_based_f0"],
+            left=np.nan,
+            right=np.nan
+        )  # 正零交叉的插值
 
-        interpolated_f0_list[2, :] = np.interp(temporal_positions,
-                                               peak.interval_locations,
-                                               peak.interval_based_f0,
-                                               left=np.nan, right=np.nan)  # 峰值的插值
+        interpolated_f0_list[2, :] = np.interp(
+            temporal_positions,
+            peak["interval_locations"],
+            peak["interval_based_f0"],
+            left=np.nan,
+            right=np.nan
+        )  # 峰值的插值
 
-        interpolated_f0_list[3, :] = np.interp(temporal_positions,
-                                               dip.interval_locations,
-                                               dip.interval_based_f0,
-                                               left=np.nan, right=np.nan)  # 谷值的插值
+        interpolated_f0_list[3, :] = np.interp(
+            temporal_positions,
+            dip["interval_locations"],
+            dip["interval_based_f0"],
+            left=np.nan,
+            right=np.nan
+        )  # 谷值的插值
 
         f0_candidate = np.mean(interpolated_f0_list, axis=0)  # 计算均值
     else:
@@ -249,18 +269,45 @@ def GetF0CandidateContour(negative_zero_cross, positive_zero_cross, peak, dip, t
 
 
 def ZeroCrossingEngine(x, fs):
-    # 负零交叉：从正到负的过渡
-    negative_going_points = (np.arange(1, len(x) + 1).reshape(-1, 1) *
-                              ((np.concatenate((x[1:], [x[-1]])) * x < 0) *
-                               (np.concatenate((x[1:], [x[-1]])) < x)))
-
-    edge_list = negative_going_points[negative_going_points > 0]  # 过滤有效的交叉点
-    fine_edge_list = edge_list - x[edge_list.flatten().astype(int)] / (x[edge_list.flatten().astype(int) + 1] - x[edge_list.flatten().astype(int)])  # 精细化交叉点
-
-    event_struct = {}  # 创建事件结构
-    event_struct['interval_locations'] = (fine_edge_list[:-1] + fine_edge_list[1:]) / 2 / fs  # 计算间隔位置
-    event_struct['interval_based_f0'] = fs / np.diff(fine_edge_list)  # 计算基于间隔的 F0
-
+    # 如果 x 是多维，则扁平化为一维数组
+    if x.ndim > 1:
+        x = x.flatten()
+        
+    # 计算相邻样本的比较结果
+    comp = np.concatenate((x[1:], [x[-1]]))
+    condition = (comp * x < 0) * (comp < x)
+    
+    # 生成1D索引数组（长度为 len(x)），并与条件逐元素相乘
+    indices_all = np.arange(1, len(x) + 1)
+    negative_going_points = indices_all * condition  # 1D 数组
+    
+    # 过滤出有效的交叉点
+    edge_list = negative_going_points[negative_going_points > 0]
+    
+    # 精细化交叉点计算：利用线性插值修正交叉位置
+    indices = edge_list.astype(int)
+    # 为防止越界，确保最后一个索引小于 len(x)-1
+    valid = indices < (len(x) - 1)
+    indices = indices[valid]
+    
+    # 计算相邻采样值之差
+    diff = x[indices + 1] - x[indices]
+    # 替换 diff 中为0的部分，避免除零
+    diff[diff == 0] = 1e-8
+    fine_edge_list = edge_list[valid] - x[indices] / diff
+    
+    event_struct = {}
+    if fine_edge_list.size < 2:
+        event_struct['interval_locations'] = np.array([])
+        event_struct['interval_based_f0'] = np.array([])
+    else:
+        event_struct['interval_locations'] = (fine_edge_list[:-1] + fine_edge_list[1:]) / 2 / fs
+        # 计算相邻交叉点的间隔
+        delta = np.diff(fine_edge_list)
+        # 替换 delta 中为0的部分，避免除零
+        delta[delta == 0] = 1e-8
+        event_struct['interval_based_f0'] = fs / delta
+    
     return event_struct
 
 
@@ -510,9 +557,12 @@ def GetRefinedF0(x, fs, current_time, current_f0, f0_floor, f0_ceil):
     fft_size = 2 ** int(np.ceil(np.log2((half_window_length * 2 + 1) + 1)))  # FFT 大小
     frequency_axis = np.arange(fft_size) / fft_size * fs  # 频率轴
 
-    # 急救处理
-    base_index = np.round((current_time + base_time) * fs + 0.001).astype(int)  # 基础索引
-    index_time = (base_index - 1) / fs  # 索引时间
+    # 急救处理：计算基于时间的索引（注意：将索引转换为 0 基准）
+    base_index = np.round((current_time + base_time) * fs + 0.001).astype(int)
+    # 将 base_index 从 1-based 转为 0-based：clip 时上界为 len(x)，减 1 后有效索引范围 0 ~ len(x)-1
+    safe_index = np.clip(base_index, 1, len(x)) - 1
+
+    index_time = safe_index / fs  # 使用安全索引转换为时间（已经是 0 基准）
     window_time = index_time - current_time  # 窗口时间
     main_window = (
         0.42 + 0.5 * np.cos(2 * np.pi * window_time / window_length_in_time) +
@@ -520,16 +570,21 @@ def GetRefinedF0(x, fs, current_time, current_f0, f0_floor, f0_ceil):
     )  # 主窗口
     diff_window = -(np.diff(np.concatenate(([0], main_window))) + np.diff(np.concatenate((main_window, [0])))) / 2  # 差分窗口
 
-    safe_index = np.clip(base_index, 1, len(x))  # 安全索引
+    # 计算频谱时，取 x[safe_index]
     spectrum = np.fft.fft(x[safe_index] * main_window, fft_size)  # 频谱
     diff_spectrum = np.fft.fft(x[safe_index] * diff_window, fft_size)  # 差分频谱
     numerator_i = np.real(spectrum) * np.imag(diff_spectrum) - np.imag(spectrum) * np.real(diff_spectrum)  # 分子
     power_spectrum = np.abs(spectrum) ** 2  # 功率谱
+    # 注意：如果 power_spectrum 中有 0，这里会产生除零问题
     instantaneous_frequency = frequency_axis + numerator_i / power_spectrum * fs / (2 * np.pi)  # 瞬时频率
 
     number_of_harmonics = min(np.floor(fs / (2 * current_f0)), 6)  # 确保安全
     harmonics_index = np.arange(1, number_of_harmonics + 1)  # 谐波索引
-    index_list = np.round(current_f0 * fft_size / fs * harmonics_index).astype(int) + 1  # 索引列表
+    # 修改：不再加1，因为索引从0开始
+    index_list = np.round(current_f0 * fft_size / fs * harmonics_index).astype(int)
+    # 确保 index_list 中的值不超出频谱范围
+    index_list = np.clip(index_list, 0, len(instantaneous_frequency)-1)
+    
     instantaneous_frequency_list = instantaneous_frequency[index_list]  # 瞬时频率列表
     amplitude_list = np.sqrt(power_spectrum[index_list])  # 振幅列表
     refined_f0 = np.sum(amplitude_list * instantaneous_frequency_list) / np.sum(amplitude_list * harmonics_index)  # 精炼的 F0
@@ -540,7 +595,7 @@ def GetRefinedF0(x, fs, current_time, current_f0, f0_floor, f0_ceil):
         refined_f0 = 0
         refined_score = 0
 
-    return refined_f0, refined_score  # 返回精炼的 F0 和分数
+    return refined_f0, refined_score
 
 
 def SmoothF0Contour(f0):
