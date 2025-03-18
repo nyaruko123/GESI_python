@@ -1,6 +1,4 @@
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#不嘻嘻
-
 # %
 # %       Test code for GESI
 # %       Irino, T.
@@ -245,7 +243,7 @@ DigitalRms1SPLdB = CalibToneSPLdB - CalibToneRMSDigitalLeveldB
 GESIparam = {
     "DigitalRms1SPLdB": DigitalRms1SPLdB,
     "Sigmoid": [-20, 6],  # 暂定值
-    "Sim": {"PowerRatio": 0.6},  # 功率不对称
+    "Sim": {"PowerRatio": [0.6]},  # 功率不对称
     "SwPlot": 2  # 画图开关
 }
 
