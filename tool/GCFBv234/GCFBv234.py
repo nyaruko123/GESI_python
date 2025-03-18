@@ -55,6 +55,8 @@ def GCFBv234(SndIn, GCparam):
         raise ValueError('Check SndIn. It should be 1 ch (Monaural) and a single row vector.')
 
     GCparam, GCresp = GCFBv23_SetParam(GCparam)
+    GCparam.setdefault('GainRefdB', 50)  # 如果没有设置，则默认设为50 dB
+
     fs = GCparam['fs']
     NumCh = GCparam['NumCh']
     Tstart = time()
@@ -77,7 +79,6 @@ def GCFBv234(SndIn, GCparam):
     # 正确解包 `MakeAsymCmpFiltersV2` 返回的多个值
     ACFcoefFixed, ACFcoefConv = MakeAsymCmpFiltersV2(fs, GCresp['Fr2'], GCresp['b2val'], GCresp['c2val'])
     
-    # 调试信息，确保 ACFcoefFixed 是字典
     print(f"DEBUG: ACFcoefFixed type = {type(ACFcoefFixed)}")
 
     pGCsmpl = np.zeros((NumCh, len(SndIn)))
@@ -86,24 +87,18 @@ def GCFBv234(SndIn, GCparam):
     print('--- Channel-by-channel processing of static filter ---')
     for nch in range(NumCh):
         pgc = GammaChirp(GCresp['Fr1'][nch], fs, GCparam['n'], GCresp['b1val'][nch], GCresp['c1val'][nch], 0, '', 'peak')
-        
-        # print(f"DEBUG: nch={nch}, type={type(pgc)}, len={len(pgc) if isinstance(pgc, list) else 'N/A'}, shape={np.shape(pgc)}")
-        
         if isinstance(pgc, tuple):
             pgc = pgc[0]  # 只取第一个返回值
 
         pgc = np.asarray(pgc, dtype=np.float64)
-        
         if pgc.ndim > 1:
             pgc = pgc.ravel()
         
         Snd = np.asarray(Snd, dtype=np.float64)
-        
         if Snd.size == 0 or pgc.size == 0:
             raise ValueError(f"Error: Empty array detected! Snd.size={Snd.size}, pgc.size={pgc.size}")
         
         pGCsmpl[nch, :] = np.convolve(Snd, pgc, mode='same')
-        
         GCsmpl1 = pGCsmpl[nch, :]
         for Nfilt in range(4):
             GCsmpl1 = np.convolve(GCsmpl1, ACFcoefFixed['bz'][nch, :, Nfilt], mode='same')
@@ -132,13 +127,14 @@ def GCFBv234(SndIn, GCparam):
         cGCRef = CmprsGCFrsp(GCresp['Fr1'], fs, GCparam['n'], GCresp['b1val'], GCresp['c1val'], GCresp['frat'], GCresp['b2val'], GCresp['c2val'])
         GCresp['GainFactor'] = 10**(GCparam['GainCmpnstdB'] / 20) * cGCRef['NormFctFp2']
         GCresp['cGCRef'] = cGCRef
-        dcGCout = (GCresp['GainFactor'] * np.ones((1, LenOut))) * cGCout
+        # 修改：将 GainFactor 转换为列向量，使乘法广播正确
+        dcGCout = (GCresp['GainFactor'][:, np.newaxis]) * cGCout
     elif GCparam['GainRefdB'] == 'NormIOfunc':
         GainFactor = 10**(-(GCparam['HLoss']['FB_AFgainCmpnstdB']) / 20)
         dcGCout = (GainFactor * np.ones((1, LenOut))) * cGCout
     else:
         raise ValueError('Set GCparam.GainRefdB properly')
-
+    
     return dcGCout, scGCsmpl, GCparam, GCresp
 
 # Note: The following functions are placeholders and need to be implemented:
