@@ -1,8 +1,7 @@
-#123
 import os
 import numpy as np
 from scipy.signal import butter, filtfilt, resample
-from scipy.io import loadmat, savemat,wavfile
+from scipy.io import loadmat, savemat
 from tool.TimeAlignXcorr import TimeAlignXcorr
 from tool.GCFBv234.tool.TaperWindow import TaperWindow
 from tool.FilterModFB import FilterModFB
@@ -13,14 +12,10 @@ from tool.GCFBv234.tool.Eqlz2MeddisHCLevel import Eqlz2MeddisHCLevel
 from tool.GCFBv234.tool.EqlzGCFB2Rms1at0dB import EqlzGCFB2Rms1at0dB
 from tool.world_0_2_4_matlab.Harvest import Harvest
 
-
-
 def resample_signal(signal, old_fs, new_fs):
     """ 计算目标采样点数并进行重采样 """
     num_samples = int(round(len(signal) * float(new_fs) / old_fs))  # 计算目标点数
     return resample(signal, num_samples)  # 进行重采样
-
-
 
 def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     # Directory of this program
@@ -45,7 +40,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
             raise ValueError('GCparam.HLoss.CompressionHealth should be specified.')
         StrHLossCond = f'{GCparam["HLoss"]["Type"]}_{int(GCparam["HLoss"]["CompressionHealth"] * 100)}_'
 
-    # Parameters of GCFB & GESI
+    # 设置默认参数
     if 'fs' not in GCparam:
         GCparam['fs'] = 48000
     if 'NumCh' not in GCparam:
@@ -56,6 +51,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         GCparam['OutMidCrct'] = 'FreeField'
     if 'HLoss' not in GCparam:
         GCparam['HLoss'] = {'Type': 'NH'}
+
     GCparam['Ctrl'] = 'dynamic'
     GCparam['DynHPAF'] = {'StrPrc': 'frame-base'}
     GCparam['StrFloor'] = 'NoiseFloor'
@@ -66,7 +62,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         input()
         GESIparam['fs'] = GCparam['fs']
 
-    # GCoutRef & GCoutTest are saved for speed up.
+    # 准备保存文件名
     if 'NameSndRef' in GESIparam:
         GESIparam['NameGCoutRef'] = f'GCout_{StrHLossCond}{GESIparam["NameSndRef"]}{StrSPLcond}'
         SwSave = True
@@ -79,52 +75,53 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         SwSave = True
     else:
         GESIparam['NameGCoutTest'] = ''
-        SwSave = False
 
-    # Sound check
+    # 声音维度检查
     if SndTest.ndim > 1 or SndRef.ndim > 1:
         raise ValueError('SndTest and SndRef should be monaural.')
     SndRef = SndRef.flatten()
     SndTest = SndTest.flatten()
 
-    # Time alignment
-    if len(SndTest) == len(SndRef) and 'SwTimeAlign' not in GESIparam:
-        print('GESI: No time alignment:  length(SndRef) == length(SndTest)')
+    # ---------------------
+    #  修改“自动对齐”部分
+    # ---------------------
+    # 若 SwTimeAlign 未设置，默认关闭对齐
+    if 'SwTimeAlign' not in GESIparam:
         GESIparam['SwTimeAlign'] = 0
+
+    if GESIparam['SwTimeAlign'] == 1:
+        # 启用自动对齐
+        print("TimeAlignXcorr is ENABLED. Doing cross-correlation alignment...")
+        SndTest, ParamTA = TimeAlignXcorr(SndTest, SndRef)
+        GESIparam['TimeAlign'] = ParamTA
     else:
-        if 'SwTimeAlign' not in GESIparam:
-            GESIparam['SwTimeAlign'] = 1
+        # 禁用自动对齐
+        print("No time alignment performed. (SwTimeAlign=0)")
+        ParamTA = {'NumTimeLag': 0, 'TimeLagInms': 0.0}
+        GESIparam['TimeAlign'] = ParamTA
 
-        if GESIparam['SwTimeAlign'] == 1:
-            SndTest, ParamTA = TimeAlignXcorr(SndTest, SndRef)
-            GESIparam['TimeAlign'] = ParamTA
-        else:
-            raise NotImplementedError('--- Not prepared yet: Another TimeAlign algorithm. ---')
+    # 如需加窗，则统一执行
+    if 'DurTaperWindow' not in GESIparam:
+        GESIparam['DurTaperWindow'] = 0.02
+    LenTaper = int(GESIparam['DurTaperWindow'] * GESIparam['fs'])
+    Win = TaperWindow(len(SndRef), 'han', LenTaper)
 
-        if 'DurTaperWindow' not in GESIparam:
-            GESIparam['DurTaperWindow'] = 0.02
-        LenTaper = int(GESIparam['DurTaperWindow'] * GESIparam['fs'])
-        Win = TaperWindow(len(SndRef), 'han', LenTaper)
+    # 如果 Win 是 tuple 或 list，只取第一个元素
+    if isinstance(Win, (tuple, list)):
+        Win = Win[0]
+    Win = np.asarray(Win, dtype=np.float32)
 
-         # 如果 Win 是 tuple 或 list，只取第一个元素
-        if isinstance(Win, (tuple, list)):
-            Win = Win[0]
-
-        # 转换成 NumPy 数组
-        Win = np.asarray(Win, dtype=np.float32)
-        SndRef *= Win
-        SndTest *= Win
+    SndRef *= Win
+    SndTest *= Win
+    # ---------------------
 
     # GESI params
     if 'Sim' not in GESIparam or 'PowerRatio' not in GESIparam['Sim']:
         GESIparam['Sim'] = {'PowerRatio': 0.6}
         print('GESIparam.Sim.PowerRatio is set to 0.6 (default) -- OK? Return to continue > ')
         input()
-    # #sui bian ding de 
-    # Env = np.copy(SndRef)
-    # ParamMFB = {'fs':GESIparam['fs']}
-   
-    # _, MFBparam = FilterModFB(Env, ParamMFB) 
+
+    # 获取调制滤波器组参数
     _, MFBparam = FilterModFB(None, None)
     if 'weightMFB' not in GESIparam['Sim']:
         LenMFB = len(MFBparam['fc'])
@@ -137,21 +134,23 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     if 'RangeWeightProhibit' not in GESIparam['Sim']:
         GESIparam['Sim']['RangeWeightProhibit'] = 1
 
-    # Sound sampling rate conversion & normalization
+    # 若 GESIparam.fs 与 GCparam.fs 不一致，则做重采样
     if GCparam['fs'] != GESIparam['fs']:
         SndTest = resample_signal(SndTest, GESIparam['fs'], GCparam['fs'])
         SndRef = resample_signal(SndRef, GESIparam['fs'], GCparam['fs'])
 
-
-    # Calibrate input level of SndRef
+    # 进行听觉级别校准
     SndRef, MdsAmpdB = Eqlz2MeddisHCLevel(SndRef, None, GESIparam['DigitalRms1SPLdB'])
+    # 同样缩放 SndTest
     SndTest *= 10**(MdsAmpdB[1] / 20)
 
-    # Analysis by dynamic compressive gammachirp filterbank
+    # --------------------
+    # 计算 GCFB 输出 (Test)
+    # --------------------
     DirNameTest = os.path.join(GESIparam['DirGCout'], f'{GESIparam["NameGCoutTest"]}.mat')
     if not os.path.exists(DirNameTest):
         print('==== GCFB calculation of SndTest (HL or NH) ====')
-        GCoutTest, _, GCparamTest,GCrespTest = GCFBv234(SndTest, GCparam)
+        GCoutTest, _, GCparamTest, GCrespTest = GCFBv234(SndTest, GCparam)
         NumCh, LenFrame = GCoutTest.shape
         GCoutTest = EqlzGCFB2Rms1at0dB(GCoutTest, GCparam['StrFloor'])
 
@@ -169,7 +168,12 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
 
         if SwSave:
             print(f'save: {DirNameTest}')
-            savemat(DirNameTest, {'GCoutTest': GCoutTest, 'GCparamTest': GCparamTest, 'GCModEnvTest': GCModEnvTest, 'MFBparam': MFBparam})
+            savemat(DirNameTest, {
+                'GCoutTest': GCoutTest,
+                'GCparamTest': GCparamTest,
+                'GCModEnvTest': GCModEnvTest,
+                'MFBparam': MFBparam
+            })
     else:
         print(f'load: {DirNameTest}')
         data = loadmat(DirNameTest)
@@ -178,11 +182,14 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         GCModEnvTest = data['GCModEnvTest']
         MFBparam = data['MFBparam']
 
+    # --------------------
+    # 计算 GCFB 输出 (Ref)
+    # --------------------
     DirNameRef = os.path.join(GESIparam['DirGCout'], f'{GESIparam["NameGCoutRef"]}.mat')
     if not os.path.exists(DirNameRef):
         print('==== GCFB calculation of SndRef (always NH) ====')
         GCparam['HLoss']['Type'] = 'NH'
-        GCoutRef, _, GCparamRef,GCrespRef = GCFBv234(SndRef, GCparam)
+        GCoutRef, _, GCparamRef, GCrespRef = GCFBv234(SndRef, GCparam)
         NumCh, LenFrame = GCoutRef.shape
         GCoutRef = EqlzGCFB2Rms1at0dB(GCoutRef, GCparam['StrFloor'])
         tFrame = np.arange(LenFrame) / GCparamRef['DynHPAF']['fs']
@@ -196,12 +203,18 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
             GCModEnvRef[nch, :, :] = ModEnv
 
         HarvestRef = Harvest(SndRef, GCparam['fs'])
+        # 计算帧对应的 F0
         F0Frame = np.interp(tFrame, HarvestRef['temporal_positions'], HarvestRef['f0'], left=0, right=0)
-        F0MeanRef = np.exp(np.mean(np.log(HarvestRef['f0'][HarvestRef['f0'] > 0])))
-        print(f'Fo Mean of Ref sound: {F0MeanRef:.1f} Hz')
+        # 计算 Ref 的平均 F0（对数平均）
+        valid_f0 = HarvestRef['f0'][HarvestRef['f0'] > 0]
+        if len(valid_f0) > 0:
+            F0MeanRef = np.exp(np.mean(np.log(valid_f0)))
+        else:
+            F0MeanRef = np.nan
+        print(f'Fo Mean of Ref sound: {F0MeanRef} Hz')
 
         if np.any(np.isnan(F0Frame)):
-            raise ValueError('Error in F0Frame.')
+            raise ValueError('Error in F0Frame: F0 contains NaN.')
 
         SSIparam = {'SwSSIweight': 2, 'Fr1': GCparamRef['Fr1']}
         SSIweightMtrx = np.zeros((NumCh, LenFrame))
@@ -209,13 +222,19 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         for nFrame in range(LenFrame):
             SSIparam['F0_limit'] = F0Frame[nFrame]
             SSIweight, SSIparam = F0limit2SSIweight(SSIparam)
+            # 归一化
             SSIweightMtrx[:, nFrame] = SSIweight / np.mean(SSIweight)
 
         SSIparam['weight'] = SSIweightMtrx
 
         if SwSave:
             print(f'save: {DirNameRef}')
-            savemat(DirNameRef, {'GCoutRef': GCoutRef, 'GCparamRef': GCparamRef, 'GCModEnvRef': GCModEnvRef, 'SSIparam': SSIparam})
+            savemat(DirNameRef, {
+                'GCoutRef': GCoutRef,
+                'GCparamRef': GCparamRef,
+                'GCModEnvRef': GCModEnvRef,
+                'SSIparam': SSIparam
+            })
     else:
         print(f'load: {DirNameRef}')
         data = loadmat(DirNameRef)
@@ -224,25 +243,32 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         GCModEnvRef = data['GCModEnvRef']
         SSIparam = data['SSIparam']
 
+    # 将结果记录到 GESIparam
     GESIparam['GCparam'] = {'Ref': GCparamRef, 'Test': GCparamTest}
     GESIparam['MFBparam'] = MFBparam
     GESIparam['SSIparam'] = SSIparam
 
+    # 若 SwPlot == 1, 画一些中间结果
     if GESIparam['SwPlot'] == 1:
         import matplotlib.pyplot as plt
         plt.figure()
         plt.subplot(2, 1, 1)
         plt.imshow(6 * GCoutTest, aspect='auto', origin='lower')
+        plt.title("GCoutTest")
         plt.subplot(2, 1, 2)
         plt.imshow(6 * GCoutRef, aspect='auto', origin='lower')
+        plt.title("GCoutRef")
         plt.show()
+
         plt.figure()
         plt.plot(SSIparam['weight'])
+        plt.title("SSIparam['weight']")
         plt.show()
 
-    # Cosine similarity analysis
+    # --------------------
+    # 计算 Cosine 相似度
+    # --------------------
     NumCh, LenMFB, _ = GCModEnvRef.shape
-
     for nrPwr in range(len(GESIparam['Sim']['PowerRatio'])):
         CosSimMtrx = np.zeros((NumCh, LenMFB))
         for nch in range(NumCh):
@@ -256,26 +282,41 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
                 PwrTest = np.sum(ModEnvTest**2)
                 rPwr = GESIparam['Sim']['PowerRatio'][nrPwr]
 
-                CosSim = np.sum(weightGCFB * ModEnvRef * ModEnvTest) / (PwrRef**rPwr * PwrTest**(1 - rPwr))
+                # 余弦相似度带权
+                numerator = np.sum(weightGCFB * ModEnvRef * ModEnvTest)
+                denominator = (PwrRef**rPwr) * (PwrTest**(1 - rPwr))
+                if denominator == 0:
+                    CosSim = 0.0
+                else:
+                    CosSim = numerator / denominator
 
+                # 如果频率过低或过高要屏蔽
                 if GESIparam['Sim']['SwWeightProhibit'] == 1:
                     if GCparamRef['Fr1'][nch] < MFBparam['fc'][nMFB] * GESIparam['Sim']['RangeWeightProhibit']:
                         weightMFB[nMFB] = np.nan
 
                 CosSimMtrx[nch, nMFB] = weightMFB[nMFB] * CosSim
 
+        # 中间结果
         Result['dIntrm'] = {'GESI': CosSimMtrx}
+        # 主指标
         Result['d'] = {'GESI': np.nanmean(CosSimMtrx)}
+        # 百分比正确率（Sigmoid）
         Result['Pcorrect'] = {'GESI': Metric2Pcorrect_Sigmoid(Result['d']['GESI'], GESIparam['Sigmoid'])}
 
+    # 若 SwPlot == 2, 显示最终 CosSim 矩阵
     if GESIparam['SwPlot'] == 2:
         import matplotlib.pyplot as plt
+        plt.figure()
         plt.imshow(Result['dIntrm']['GESI'] * 256, aspect='auto', origin='lower')
         plt.xlabel('MFB channel')
         plt.ylabel('GCFB channel')
+        plt.title("CosSim Matrix (dIntrm['GESI'])")
+        plt.colorbar()
         plt.show()
 
     return Result, GESIparam
+
 
 # import os
 # import numpy as np
