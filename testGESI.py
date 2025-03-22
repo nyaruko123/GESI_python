@@ -240,15 +240,19 @@ CalibToneSPLdB = 65
 CalibToneRMSDigitalLeveldB = -26
 DigitalRms1SPLdB = CalibToneSPLdB - CalibToneRMSDigitalLeveldB
 
+# 这里增加了 SwTimeAlign，用来控制是否执行自动对齐
+# SwTimeAlign = 0 -> 不执行 TimeAlignXcorr
+# SwTimeAlign = 1 -> 执行 TimeAlignXcorr
 GESIparam = {
     "DigitalRms1SPLdB": DigitalRms1SPLdB,
     "Sigmoid": [-20, 6],  # 暂定值
     "Sim": {"PowerRatio": [0.6]},  # 功率不对称
-    "SwPlot": 2  # 画图开关
+    "SwPlot": 2,  # 画图开关
+    "SwTimeAlign": 0  # <-- 这里可根据需要改成 0 或 1
 }
 
 # 材料参数
-SNRList = [-6, -3, 0, 3]  # 语音与噪声的信噪比
+SNRList = [0]
 np.random.seed(12345)  # 设置随机种子，保证模拟结果可复现
 
 # 开始模拟
@@ -270,11 +274,61 @@ for nSnd, snr in enumerate(SNRList):
         raise ValueError('采样率不一致')
     GESIparam["fs"] = fs  # 设定采样率
 
-    # 语音对齐
-    print('-- 通过 TimeAlignXcorr 进行语音对齐')
+    # 确保 SndTest 和 SndRef 为 numpy 数组
+    if isinstance(SndTest, tuple):
+        SndTest = np.array(SndTest)
+    if isinstance(SndRef, tuple):
+        SndRef = np.array(SndRef)
+
+    # ----------------- 手动截取和加窗处理开始 -----------------
+    # MATLAB 中的逻辑：从 SndTest 中跳过前 0.35 秒，然后截取与 SndRef 等长的片段
+    TimeSndBefore = 0  # 单位秒
+    numBefore = int(fs * TimeSndBefore)
+    if len(SndTest) < numBefore + len(SndRef):
+        print("SndTest 的长度不足以跳过 0.35 秒，将直接使用开头部分")
+        numBefore = 0
+    SndTest = SndTest[numBefore : numBefore + len(SndRef)]
+    
+    # 加窗处理：20 毫秒的 taper window
+    GESIparam["DurTaperWindow"] = 0.02  # 20ms
+    LenTaper = int(GESIparam["DurTaperWindow"] * fs)
+    win = TaperWindow(len(SndRef), 'han', LenTaper)
+    # 如果 TaperWindow 返回的是 tuple，则取第一个元素
+    if isinstance(win, tuple):
+        win = win[0]
+    
+    # 确保转换为 float32 后进行窗函数相乘
+    SndRef = SndRef.astype(np.float32) * win.astype(np.float32)
+    SndTest = SndTest.astype(np.float32) * win.astype(np.float32)
+    # ----------------- 手动截取和加窗处理结束 -----------------
+
+    # print("len(SndRef) =", len(SndRef), 
+    #       "min =", SndRef.min(), "max =", SndRef.max())
+    # print("len(SndTest) =", len(SndTest), 
+    #       "min =", SndTest.min(), "max =", SndTest.max())
+    
+    # # 分别画出 SndRef 和 SndTest 的波形
+    # plt.figure(figsize=(10, 6))
+    # plt.subplot(2,1,1)
+    # plt.plot(SndRef, color='blue')
+    # plt.title("SndRef waveform")
+    
+    # plt.subplot(2,1,2)
+    # plt.plot(SndTest, color='orange')
+    # plt.title("SndTest waveform")
+    
+    # plt.tight_layout()
+    # plt.show()
+
+    # 语音对齐（是否执行取决于 GESIparam["SwTimeAlign"]）
+    print('-- 准备进入 GESIv123 计算语音可懂度 --')
+    if GESIparam["SwTimeAlign"] == 1:
+        print('>> 自动对齐已启用 (SwTimeAlign=1)')
+    else:
+        print('>> 自动对齐已禁用 (SwTimeAlign=0)')
 
     # 计算语音可懂度
-    Result, GESIparam = GESIv123(SndRef.astype(np.float32), SndTest.astype(np.float32), GCparam, GESIparam)
+    Result, GESIparam = GESIv123(SndRef, SndTest, GCparam, GESIparam)
     Metric.append(Result["d"]["GESI"])
     Pcorrects.append(Result["Pcorrect"]["GESI"])
 
@@ -294,7 +348,7 @@ for nSnd, snr in enumerate(SNRList):
     plt.colorbar()
 
     plt.subplot(1, 2, 2)
-    plt.imshow(GESIparam.get("SSIparam", {}).get("weight", np.zeros((10,10))) * 256 * 0.8, aspect='auto', origin='lower')
+    plt.imshow(GESIparam.get("SSIparam", {}).get("weight", np.zeros((10, 10))) * 256 * 0.8, aspect='auto', origin='lower')
     plt.xlabel('帧')
     plt.ylabel('GCFB 通道')
     plt.title('SSI 权重')
@@ -317,5 +371,6 @@ plt.legend(['未处理'])
 plt.title('GESI 示例声音结果')
 plt.grid(True)
 plt.show()
+
 
 
