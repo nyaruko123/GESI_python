@@ -3,13 +3,13 @@ import numpy as np
 from scipy.signal import butter, filtfilt, resample
 from scipy.io import loadmat, savemat
 from tool.TimeAlignXcorr import TimeAlignXcorr
-from tool.GCFBv234.tool.TaperWindow import TaperWindow
+from tool.gcfb_v234.utils import taper_window
 from tool.FilterModFB import FilterModFB
-from tool.GCFBv234.GCFBv234 import GCFBv234
+from tool.gcfb_v234.gcfb_v234 import gcfb_v234
 from tool.F0limit2SSIweight import F0limit2SSIweight
 from tool.Metric2Pcorrect_Sigmoid import Metric2Pcorrect_Sigmoid
-from tool.GCFBv234.tool.Eqlz2MeddisHCLevel import Eqlz2MeddisHCLevel
-from tool.GCFBv234.tool.EqlzGCFB2Rms1at0dB import EqlzGCFB2Rms1at0dB
+from tool.gcfb_v234.utils import eqlz2meddis_hc_level
+from tool.gcfb_v234.utils import eqlz_gcfb2rms1_at_0db
 from tool.world_0_2_4_matlab.Harvest import Harvest
 
 def resample_signal(signal, old_fs, new_fs):
@@ -104,7 +104,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     if 'DurTaperWindow' not in GESIparam:
         GESIparam['DurTaperWindow'] = 0.02
     LenTaper = int(GESIparam['DurTaperWindow'] * GESIparam['fs'])
-    Win = TaperWindow(len(SndRef), 'han', LenTaper)
+    Win = taper_window(len(SndRef), 'han', LenTaper)
 
     # 如果 Win 是 tuple 或 list，只取第一个元素
     if isinstance(Win, (tuple, list)):
@@ -140,7 +140,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         SndRef = resample_signal(SndRef, GESIparam['fs'], GCparam['fs'])
 
     # 进行听觉级别校准
-    SndRef, MdsAmpdB = Eqlz2MeddisHCLevel(SndRef, None, GESIparam['DigitalRms1SPLdB'])
+    SndRef, MdsAmpdB = eqlz2meddis_hc_level(SndRef, None, GESIparam['DigitalRms1SPLdB'])
     # 同样缩放 SndTest
     SndTest *= 10**(MdsAmpdB[1] / 20)
 
@@ -150,7 +150,7 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     DirNameTest = os.path.join(GESIparam['DirGCout'], f'{GESIparam["NameGCoutTest"]}.mat')
     if not os.path.exists(DirNameTest):
         print('==== GCFB calculation of SndTest (HL or NH) ====')
-        GCoutTest, _, GCparamTest, GCrespTest = GCFBv234(SndTest, GCparam)
+        GCoutTest, _, GCparamTest, GCrespTest = gcfb_v234(SndTest, GCparam)
         NumCh, LenFrame = GCoutTest.shape
         GCoutTest = EqlzGCFB2Rms1at0dB(GCoutTest, GCparam['StrFloor'])
 
