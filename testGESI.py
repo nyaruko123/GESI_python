@@ -210,9 +210,10 @@ import os
 import numpy as np
 import scipy.io.wavfile as wav
 import matplotlib.pyplot as plt
-from tool.GCFBv234.tool.TaperWindow import TaperWindow  # 仅引用，不实现
+from tool.gcfb_v234.utils import taper_window  
 from tool.StartupGCFB import StartupGCFB  # 仅引用，不实现
-from GESIv123 import GESIv123  # 仅引用，不实现
+from tool.gcfb_v234.gcfb_v234 import gcfb_v234
+from GESIv123 import GESIv123
 
 # 目录设置
 DirProg = os.path.dirname(os.path.abspath(__file__))  # 获取当前文件所在目录
@@ -292,7 +293,7 @@ for nSnd, snr in enumerate(SNRList):
     # 加窗处理：20 毫秒的 taper window
     GESIparam["DurTaperWindow"] = 0.02  # 20ms
     LenTaper = int(GESIparam["DurTaperWindow"] * fs)
-    win = TaperWindow(len(SndRef), 'han', LenTaper)
+    win = taper_window(len(SndRef), 'han', LenTaper)
     # 如果 TaperWindow 返回的是 tuple，则取第一个元素
     if isinstance(win, tuple):
         win = win[0]
@@ -302,10 +303,10 @@ for nSnd, snr in enumerate(SNRList):
     SndTest = SndTest.astype(np.float32) * win.astype(np.float32)
     # ----------------- 手动截取和加窗处理结束 -----------------
 
-    # print("len(SndRef) =", len(SndRef), 
-    #       "min =", SndRef.min(), "max =", SndRef.max())
-    # print("len(SndTest) =", len(SndTest), 
-    #       "min =", SndTest.min(), "max =", SndTest.max())
+    print("len(SndRef) =", len(SndRef), 
+          "min =", SndRef.min(), "max =", SndRef.max())
+    print("len(SndTest) =", len(SndTest), 
+          "min =", SndTest.min(), "max =", SndTest.max())
     
     # # 分别画出 SndRef 和 SndTest 的波形
     # plt.figure(figsize=(10, 6))
