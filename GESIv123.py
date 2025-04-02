@@ -10,7 +10,11 @@ from tool.F0limit2SSIweight import F0limit2SSIweight
 from tool.Metric2Pcorrect_Sigmoid import Metric2Pcorrect_Sigmoid
 from tool.gcfb_v234.utils import eqlz2meddis_hc_level
 from tool.gcfb_v234.utils import eqlz_gcfb2rms1_at_0db
-from tool.world_0_2_4_matlab.Harvest import Harvest
+# from tool.world_0_2_4_matlab.Harvest import Harvest
+import pyworld as pw
+import numpy as np
+
+
 
 def resample_signal(signal, old_fs, new_fs):
     """ 计算目标采样点数并进行重采样 """
@@ -232,7 +236,31 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
             ModEnv, _ = FilterModFB(Env, MFBparam)
             GCModEnvRef[nch, :, :] = ModEnv
 
-        HarvestRef = Harvest(SndRef, GCparam['fs'])
+        # HarvestRef = Harvest(SndRef, GCparam['fs'])
+        # # 计算帧对应的 F0
+        # F0Frame = np.interp(tFrame, HarvestRef['temporal_positions'], HarvestRef['f0'], left=0, right=0)
+        # F0Frame = np.maximum(F0Frame, 0)
+
+        # # 计算 Ref 的平均 F0（对数平均）
+        # valid_f0 = HarvestRef['f0'][HarvestRef['f0'] > 0]
+        # if len(valid_f0) > 0:
+        #     F0MeanRef = np.exp(np.mean(np.log(valid_f0)))
+        # else:
+        #     F0MeanRef = np.nan
+        # print(f'Fo Mean of Ref sound: {F0MeanRef} Hz')
+
+        
+
+        # 使用 pyworld 提取 F0（Harvest + Stonemask 精修）
+        _f0, _time_axis = pw.harvest(SndRef.astype(np.float64), GCparam['fs'])  # 初步估计
+        f0_refined = pw.stonemask(SndRef.astype(np.float64), _f0, _time_axis, GCparam['fs'])  # 精细调整
+
+        # 构造 HarvestRef，保持和原来一致的格式
+        HarvestRef = {
+        'f0': f0_refined,
+        'temporal_positions': _time_axis
+        }
+
         # 计算帧对应的 F0
         F0Frame = np.interp(tFrame, HarvestRef['temporal_positions'], HarvestRef['f0'], left=0, right=0)
         F0Frame = np.maximum(F0Frame, 0)
@@ -244,6 +272,8 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         else:
             F0MeanRef = np.nan
         print(f'Fo Mean of Ref sound: {F0MeanRef} Hz')
+
+
 
         if np.any(np.isnan(F0Frame)):
             raise ValueError('Error in F0Frame: F0 contains NaN.')
