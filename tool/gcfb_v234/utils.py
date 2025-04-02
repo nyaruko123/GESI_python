@@ -321,6 +321,14 @@ def out_mid_crct_filt(str_crct, sr, sw_plot=0, sw_filter=0):
     # n_int = 0 # No spline interpolation:  NG no convergence at remez
 
     crct_pwr, freq, _ = out_mid_crct(str_crct, n_int, sr, 0)
+
+    # [保护机制] 检查非法值并修正
+    if np.any(crct_pwr < 0) or np.any(np.isnan(crct_pwr)):
+        print(f">>> ERROR: crct_pwr 中存在非法值，最小值为: {np.min(crct_pwr)}")
+        crct_pwr = np.maximum(crct_pwr, 0)  # 抹掉负值
+        crct_pwr[np.isnan(crct_pwr)] = 0    # 抹掉 NaN
+        print(">>> WARNING: crct_pwr 中的负值或 NaN 已替换为 0") 
+    
     crct = np.sqrt(crct_pwr[:,0])
     freq = freq[:,0]
 
@@ -511,6 +519,13 @@ def out_mid_crct(str_crct, n_frq_rsl=0, fs=32000, sw_plot=1):
         plt.show()
 
     crct_pwr_lin = 10**(-freq_char_db_to_be_cmpnstd/10) # in Linear Power. Checked 19 Apr 2016
+
+    #debug用
+    print(">>> DEBUG: out_mid_crct 返回频率点数量:", len(freq))
+    print(">>> DEBUG: 补偿值中最小值:", np.min(freq_char_db_to_be_cmpnstd))
+    print(">>> DEBUG: crct_pwr_lin 最小值:", np.min(crct_pwr_lin))
+    print(">>> DEBUG: crct_pwr_lin 中是否存在负值:", np.any(crct_pwr_lin < 0))
+    print(">>> DEBUG: crct_pwr_lin 中是否存在 NaN:", np.any(np.isnan(crct_pwr_lin)))
 
     return crct_pwr_lin, freq, freq_char_db_to_be_cmpnstd
 
@@ -806,7 +821,42 @@ def mk_filter_field2cochlea(str_crct, fs, sw_fwd_bwd=1, sw_plot=0):
     elif sw_type == 10:
         # ELC for backward compativility
         n_rslt = 2048
-        crct_pwr, freq = out_mid_crct_filt(str_crct, n_rslt, fs, 0)
+        
+        #crct_pwr, freq = out_mid_crct_filt(str_crct, n_rslt, fs, 0)
+        #crct_pwr, freq = out_mid_crct_filt(str_crct, n_rslt, fs, 0)#改
+
+        crct_pwr, freq, _ = out_mid_crct(str_crct, n_rslt, fs, sw_plot)
+
+        print(f">>> DEBUG: out_mid_crct 返回频率点数量: {len(freq)}")
+        print(f">>> DEBUG: 补偿值中最小值: {np.min(freq)}")
+        print(f">>> DEBUG: crct_pwr_lin 最小值: {np.min(crct_pwr)}")
+        print(f">>> DEBUG: crct_pwr_lin 中是否存在负值: {np.any(crct_pwr < 0)}")
+        print(f">>> DEBUG: crct_pwr_lin 中是否存在 NaN: {np.any(np.isnan(crct_pwr))}")
+        # 检查 crct_pwr 是否非法
+        if np.any(np.isnan(crct_pwr)) or np.any(crct_pwr < 0):
+            print(f">>> ERROR: crct_pwr 中存在非法值，最小值为: {np.min(crct_pwr)}")
+            crct_pwr = np.maximum(crct_pwr, 0)  # 将负值归零
+            print(f">>> WARNING: crct_pwr 中的负值或 NaN 已替换为 0")
+
+        frsp_crct = np.sqrt(crct_pwr)
+
+        freq = np.squeeze(freq)  # ✅ 保证 freq 是 1D 向量
+        if freq.ndim != 1:
+            raise ValueError(f"freq 维度不合法，应为 1D 向量，当前 shape={freq.shape}")
+
+
+        # 安全处理非法值，避免 sqrt 出错
+    if np.any(crct_pwr < 0) or np.any(np.isnan(crct_pwr)):
+        print(f">>> ERROR: crct_pwr 中存在非法值，最小值为: {np.min(crct_pwr)}")
+        crct_pwr = np.maximum(crct_pwr, 0)  # 抹掉负值
+        crct_pwr[np.isnan(crct_pwr)] = 0    # 抹掉 NaN
+        print(">>> WARNING: crct_pwr 中的负值或 NaN 已替换为 0")
+
+        # #debug
+        # if np.any(crct_pwr < 0) or np.any(np.isnan(crct_pwr)):
+        #     print(">>> ERROR: crct_pwr 中存在非法值，最小值为:", np.min(crct_pwr))
+        #     raise ValueError("crct_pwr 中存在负值或 NaN，无法开平方")
+
         frsp_crct = np.sqrt(crct_pwr)
     
     if sw_fwd_bwd == -1: # Backward filter
@@ -824,8 +874,19 @@ def mk_filter_field2cochlea(str_crct, fs, sw_fwd_bwd=1, sw_plot=0):
     """
     x1 = np.array(np.arange(len(freq))).T * 2
     x2 = np.array(np.arange(len(freq)*2)).T
+
     freq_interp = np.interp(x2, x1, freq)
+
+    # print("freq_interp.shape:", freq_interp.shape)   #debug
+    # print("frsp_crct.shape:", frsp_crct.shape)#
+
+    if frsp_crct.ndim > 1:
+        frsp_crct = frsp_crct.flatten()
+
     fir_coef = signal.remez(n_coef+1, freq_interp, frsp_crct, fs=fs)
+    #fir_coef = signal.remez(n_coef+1, freq_interp, frsp_crct.flatten(), fs=fs)
+
+
 
     win, _ = taper_window(len(fir_coef), 'han', len_coef/10) # necessary to avoid sprious
     fir_coef = win * fir_coef
@@ -1463,7 +1524,9 @@ def eqlz_gcfb2rms1_at_0db(gc_val, str_floor=None):
 
     if not str_floor == None:
         if str_floor == 'NoiseFloor':
-            gc_re_at = gc_re_at + np.random.randn(gc_re_at.shape) # add Gauss noise
+            #gc_re_at = gc_re_at + np.random.randn(gc_re_at.shape) # add Gauss noise
+            gc_re_at = gc_re_at + np.random.randn(*gc_re_at.shape)  # ✅
+
         elif str_floor == 'ZeroFloor':
             gc_re_at = np.maximum(gc_re_at-1, 0) # cut-off value less than 1 
         else:
