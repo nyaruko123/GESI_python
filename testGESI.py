@@ -220,7 +220,7 @@ DirProg = os.path.dirname(os.path.abspath(__file__))  # 获取当前文件所在
 DirRoot = DirProg + '/'  # 根目录
 
 # 必要的软件包：动态压缩 gammachirp 滤波器库
-DirGCFB = '/home/sun/GESI_python/tool/GCFBv234'  # 本地使用
+DirGCFB = '/home/sun/GESI_python/tool/gcfb_v234'  # 本地使用
 # 添加路径并启动 GCFB
 os.sys.path.append(DirGCFB)
 StartupGCFB()
@@ -249,11 +249,11 @@ GESIparam = {
     "Sigmoid": [-20, 6],  # 暂定值
     "Sim": {"PowerRatio": [0.6]},  # 功率不对称
     "SwPlot": 2,  # 画图开关
-    "SwTimeAlign": 0  # <-- 这里可根据需要改成 0 或 1
+    "SwTimeAlign":1  # <-- 这里可根据需要改成 0 或 1
 }
 
 # 材料参数
-SNRList = [0]
+SNRList = [-6,-3,0,3]
 np.random.seed(12345)  # 设置随机种子，保证模拟结果可复现
 
 # 开始模拟
@@ -265,11 +265,15 @@ for nSnd, snr in enumerate(SNRList):
     NameSndTest = f'sample_sp{nSnd}'
     print(f'SndTest: {NameSndTest}')
     fs, SndTest = wav.read(os.path.join(DirSnd, NameSndTest + '.wav'))
+    if SndTest.dtype == np.int16:
+        SndTest = SndTest.astype(np.float32) / 32768.0
 
     # 参考信号（干净语音）
-    NameSndRef = 'sample_sp_clean'
+    NameSndRef = 'sample_sp_clean+pre'
     print(f'SndRef : {NameSndRef}')
     fs2, SndRef = wav.read(os.path.join(DirSnd, NameSndRef + '.wav'))
+    if SndRef.dtype == np.int16:
+        SndRef = SndRef.astype(np.float32) / 32768.0
 
     if fs != fs2:
         raise ValueError('采样率不一致')
@@ -283,7 +287,7 @@ for nSnd, snr in enumerate(SNRList):
 
     # ----------------- 手动截取和加窗处理开始 -----------------
     # MATLAB 中的逻辑：从 SndTest 中跳过前 0.35 秒，然后截取与 SndRef 等长的片段
-    TimeSndBefore = 0  # 单位秒
+    TimeSndBefore = 0.35  # 单位秒
     numBefore = int(fs * TimeSndBefore)
     if len(SndTest) < numBefore + len(SndRef):
         print("SndTest 的长度不足以跳过 0.35 秒，将直接使用开头部分")
@@ -334,7 +338,7 @@ for nSnd, snr in enumerate(SNRList):
     Pcorrects.append(Result["Pcorrect"]["GESI"])
 
     print('==========================================')
-    print(f'百分比正确率（临时）: {Pcorrects[nSnd]} (%)')
+    print(f'correct: {Pcorrects[nSnd]} (%)')
     if "TimeAlign" in GESIparam and "NumTimeLag" in GESIparam["TimeAlign"]:
         print(f'TimeAlign: {GESIparam["TimeAlign"]["NumTimeLag"]}')
     print('==========================================')
@@ -343,16 +347,16 @@ for nSnd, snr in enumerate(SNRList):
     plt.figure(nSnd)
     plt.subplot(1, 2, 1)
     plt.imshow(Result["dIntrm"]["GESI"] * 256, aspect='auto', origin='lower')
-    plt.xlabel('MFB 通道')
-    plt.ylabel('GCFB 通道')
+    plt.xlabel('MFB channel')
+    plt.ylabel('GCFB channel')
     plt.title(f'Metric: {Metric[nSnd]:.3f}, Pcorrect: {Pcorrects[nSnd]:.1f}')
     plt.colorbar()
 
     plt.subplot(1, 2, 2)
     plt.imshow(GESIparam.get("SSIparam", {}).get("weight", np.zeros((10, 10))) * 256 * 0.8, aspect='auto', origin='lower')
-    plt.xlabel('帧')
-    plt.ylabel('GCFB 通道')
-    plt.title('SSI 权重')
+    plt.xlabel('frame')
+    plt.ylabel('GCFB channel')
+    plt.title('SSI weight')
     plt.colorbar()
 
     plt.show()
@@ -367,9 +371,9 @@ plt.plot(SNRList, Pcorrects, 'o-')
 plt.xlim([min(SNRList) - 0.5, max(SNRList) + 0.5])
 plt.ylim([0 - 0.5, 100 + 0.5])
 plt.xlabel('SNR (dB)')
-plt.ylabel('百分比正确率 (%)')
+plt.ylabel('correct (%)')
 plt.legend(['未处理'])
-plt.title('GESI 示例声音结果')
+plt.title('GESI ')
 plt.grid(True)
 plt.show()
 
