@@ -141,8 +141,18 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
 
     # 进行听觉级别校准
     SndRef, MdsAmpdB = eqlz2meddis_hc_level(SndRef, None, GESIparam['DigitalRms1SPLdB'])
+    print("SndRef (calibrated): mean =", np.mean(SndRef), ", std =", np.std(SndRef))#debug
     # 同样缩放 SndTest
     SndTest *= 10**(MdsAmpdB[1] / 20)
+    print("SndTest (scaled): mean =", np.mean(SndTest), ", std =", np.std(SndTest))#debug
+
+    # 去除 DC 分量
+    SndRef = SndRef - np.mean(SndRef)
+    SndTest = SndTest - np.mean(SndTest)
+    print("After DC removal:")#debug
+    print("SndRef: mean =", np.mean(SndRef), ", std =", np.std(SndRef))
+    print("SndTest: mean =", np.mean(SndTest), ", std =", np.std(SndTest))
+
 
     # --------------------
     # 计算 GCFB 输出 (Test)
@@ -152,9 +162,27 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         print('==== GCFB calculation of SndTest (HL or NH) ====')
         GCoutTest, _, GCparamTest, GCrespTest = gcfb_v234(SndTest, GCparam)
         NumCh, LenFrame = GCoutTest.shape
-        GCoutTest = EqlzGCFB2Rms1at0dB(GCoutTest, GCparam['StrFloor'])
+        GCoutTest = eqlz_gcfb2rms1_at_0db(GCoutTest, GCparam['StrFloor'])
 
-        MFBparam['fs'] = GCparamTest['DynHPAF']['fs']
+        #print(type(GCparamTest), type(GCparamTest.get('DynHPAF'))) #debug
+        #print(type(GCparamTest), type(GCparamTest.DynHPAF)) #debug
+
+
+        #MFBparam['fs'] = GCparamTest['DynHPAF']['fs']
+
+        #print(">>> DEBUG: DynHPAF keys:", GCparamTest.DynHPAF.keys()) #debug
+
+        # print(">>> DEBUG: GCparamTest 内容:")
+        # for key in vars(GCparamTest):
+        #     print(f"{key}: {getattr(GCparamTest, key)}")   #debug
+
+
+        #MFBparam['fs'] = GCparamTest.DynHPAF['fs']
+        MFBparam['fs'] = GCparamTest.dyn_hpaf.fs
+
+
+       
+
         MFBparam['fcutEnv'] = 150
         MFBparam['bzLPF'], MFBparam['apLPF'] = butter(1, MFBparam['fcutEnv'] / (MFBparam['fs'] / 2))
 
@@ -189,10 +217,12 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
     if not os.path.exists(DirNameRef):
         print('==== GCFB calculation of SndRef (always NH) ====')
         GCparam['HLoss']['Type'] = 'NH'
-        GCoutRef, _, GCparamRef, GCrespRef = GCFBv234(SndRef, GCparam)
+        GCoutRef, _, GCparamRef, GCrespRef = gcfb_v234(SndRef, GCparam)
         NumCh, LenFrame = GCoutRef.shape
-        GCoutRef = EqlzGCFB2Rms1at0dB(GCoutRef, GCparam['StrFloor'])
-        tFrame = np.arange(LenFrame) / GCparamRef['DynHPAF']['fs']
+        GCoutRef = eqlz_gcfb2rms1_at_0db(GCoutRef, GCparam['StrFloor'])
+        #tFrame = np.arange(LenFrame) / GCparamRef['DynHPAF']['fs']
+        tFrame = np.arange(LenFrame) / GCparamRef.dyn_hpaf.fs
+
 
         GCModEnvRef = np.zeros((NumCh, LenMFB, LenFrame))
         for nch in range(GCparam['NumCh']):
@@ -205,6 +235,8 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         HarvestRef = Harvest(SndRef, GCparam['fs'])
         # 计算帧对应的 F0
         F0Frame = np.interp(tFrame, HarvestRef['temporal_positions'], HarvestRef['f0'], left=0, right=0)
+        F0Frame = np.maximum(F0Frame, 0)
+
         # 计算 Ref 的平均 F0（对数平均）
         valid_f0 = HarvestRef['f0'][HarvestRef['f0'] > 0]
         if len(valid_f0) > 0:
@@ -216,14 +248,19 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
         if np.any(np.isnan(F0Frame)):
             raise ValueError('Error in F0Frame: F0 contains NaN.')
 
-        SSIparam = {'SwSSIweight': 2, 'Fr1': GCparamRef['Fr1']}
+        #SSIparam = {'SwSSIweight': 2, 'Fr1': GCparamRef['Fr1']}
+        SSIparam = {'SwSSIweight': 2, 'Fr1': GCparamRef.fr1}
+
         SSIweightMtrx = np.zeros((NumCh, LenFrame))
 
         for nFrame in range(LenFrame):
             SSIparam['F0_limit'] = F0Frame[nFrame]
             SSIweight, SSIparam = F0limit2SSIweight(SSIparam)
             # 归一化
-            SSIweightMtrx[:, nFrame] = SSIweight / np.mean(SSIweight)
+            
+            #SSIweightMtrx[:, nFrame] = SSIweight / np.mean(SSIweight)
+            SSIweightMtrx[:, nFrame] = (SSIweight / np.mean(SSIweight)).flatten()
+
 
         SSIparam['weight'] = SSIweightMtrx
 
@@ -292,7 +329,11 @@ def GESIv123(SndRef, SndTest, GCparam, GESIparam):
 
                 # 如果频率过低或过高要屏蔽
                 if GESIparam['Sim']['SwWeightProhibit'] == 1:
-                    if GCparamRef['Fr1'][nch] < MFBparam['fc'][nMFB] * GESIparam['Sim']['RangeWeightProhibit']:
+                    #if GCparamRef['Fr1'][nch] < MFBparam['fc'][nMFB] * GESIparam['Sim']['RangeWeightProhibit']:
+                    # if GCparamRef.Fr1[nch] < MFBparam['fc'][nMFB] * GESIparam['Sim']['RangeWeightProhibit']:
+                    if GCparamRef.fr1[nch] < MFBparam['fc'][nMFB] * GESIparam['Sim']['RangeWeightProhibit']:
+
+
                         weightMFB[nMFB] = np.nan
 
                 CosSimMtrx[nch, nMFB] = weightMFB[nMFB] * CosSim
